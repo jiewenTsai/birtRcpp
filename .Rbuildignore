@@ -10,3 +10,4 @@
 ^.*Rplots\.pdf$
 ^\.gitignore$
 ^\.github$
+^README\.zh-TW\.md$
