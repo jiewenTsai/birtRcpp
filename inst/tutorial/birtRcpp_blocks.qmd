@@ -1,0 +1,1562 @@
+---
+title: "birtRcpp 積木"
+subtitle: "宣告模型，用 ECM、Gibbs、CAVI 估計"
+author: "Jie-Wen Tsai"
+date: today
+lang: zh-Hant
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    embed-resources: true
+    code-tools: true
+    code-overflow: wrap
+    theme: cosmo
+    df-print: kable
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## 0. 這份教學怎麼讀
+
+**先讀過：** 第一份教學《birtRcpp 入門》，至少前 4 節。
+
+**這份教學做什麼：** 現成模型（`ecm()`、`gibbs()`）做不到的模型，自己寫出來估計。寫法分兩步：
+
+1. **宣告模型：** 像 JAGS 一樣，寫下每個參數和資料服從什麼分配。
+2. **選估計法：** 同一個模型、同一份「步驟清單」，可以交給三種估計法：
+   - `ecm()`：ECM，**主要的估計法**。得到後驗眾數（或最大概似估計）與標準誤。
+   - `gibbs()`：同樣的步驟改成抽樣。得到後驗分配的樣本。
+   - `vi()`：同樣的步驟改成 CAVI（一種變分貝氏法）。得到後驗分配的近似。
+
+   另外還有 `mml()`。它不用步驟清單，直接最大化 ECM 的同一個目標（第 8 節）。
+
+   上面的詞（後驗眾數、變分貝氏等）都在下面的詞表裡。
+
+**和其他軟體的分工：**
+
+- JAGS、Stan、PyMC（Abril-Pla et al., 2023）、RTMB（以及 birt 套件）：你寫模型，軟體全自動決定怎麼估計。
+- birtRcpp 積木：你寫模型，**也決定每一塊參數用什麼方法更新**。
+- 所以積木適合研究估計方法本身。例如：換一種分塊方式；做 cut 推論（第 6 節）；比較三種估計法。
+
+**怎麼讀：**
+
+- 每段程式後面都有「逐行說明」和「輸出怎麼讀」。
+- 第 1–4 節請照順序讀。第 5 節以後可以挑需要的讀。
+- 第 9 節不用宣告，直接手寫每一步（進階）。
+
+### 先認識幾個詞
+
+不用一次記住。後面第一次用到時，會再說一次。
+
+| 詞 | 意思 |
+|---|---|
+| 聯合後驗 | 所有參數放在一起的後驗分配 |
+| 完整條件分配 | 假裝其他參數都已知時，某一塊參數的後驗分配 |
+| 精確度 | 1 / 變異數。精確度愈大，分配愈窄 |
+| 截斷常態 | 只取某個範圍的常態，例如 a 只取正值 |
+| 逆伽瑪分配 | 只取正值的分配。變異數的完整條件分配常是這一型 |
+| 眾數 | 分配的最高點 |
+| 後驗眾數 | 後驗分配的最高點，也叫 MAP（maximum a posteriori） |
+| 最大概似估計 | 只看概似、不看先驗時的最高點 |
+| 積掉一個變數 | 不估它。改用「把它平均掉」之後的分配 |
+| 目標值 | ECM 要讓它變大的值：θ 積掉之後的 log 後驗（或 log 概似） |
+| 積分點（node） | 用幾個 θ 值和權重，近似「對 θ 平均」。入門教學叫「求積點」 |
+| 標準誤 | 估計值的不確定性。由目標值在最高點的彎曲程度（曲率）算出 |
+| 疊代（iteration、sweep） | 把步驟清單全部做一遍 |
+| 混合（mixing） | 抽樣的鏈在後驗裡走動的快慢 |
+| burn-in | 鏈前面一段丟掉不用的抽樣 |
+| ESS | 有效樣本數：相當於幾個互相獨立的抽樣值。低於 100 時套件會警告；正式報告建議 400 以上（入門教學） |
+| R̂ | 比較幾條鏈是否一致。大於 1.05 表示鏈還沒混合好 |
+| Monte Carlo 誤差 | 只跑有限次，所以後驗平均數本身也有誤差，約為 SD / √ESS |
+| 梯度 | 函數對每個參數的斜率。它指向函數變大最快的方向 |
+| 變分貝氏 | 不抽樣，改找一個簡單的分配 q 來近似後驗。CAVI 是其中一種做法 |
+| 變分分配 q | CAVI 用來近似後驗的分配。每一塊參數各一個，彼此獨立 |
+| 平均場（mean-field） | 「q 的各塊彼此獨立」這個假設 |
+| ELBO | CAVI 要讓它變大的目標值。ELBO 愈大，q 愈接近後驗 |
+
+```{r setup}
+library(birtRcpp)
+```
+
+**逐行說明**
+
+1. 載入套件。
+
+**輸出怎麼讀**
+
+- 這一段不印東西（訊息已關掉）。
+- 自己在 R 裡跑，會看到一則訊息：birtRcpp 的 `vi()` 蓋過了 utils 套件的同名函數。
+- utils 的 `vi()` 是開文字編輯器用的。這裡用不到，不影響。
+
+## 1. 一個完整條件分配，三種用法
+
+這一節不跑模型，只講三種估計法共用的想法。符號：j 是人，i 是題。
+
+### 完整條件分配：一次看一塊
+
+2PL 有很多參數：每個人的 θ_j，每題的 a_i 和 b_i。所有參數放在一起，就是聯合後驗。聯合後驗很複雜：直接找它的最高點很難，直接從它抽樣也很難。
+
+三種估計法都用同一個辦法：**分塊**。
+
+1. 假裝 a、b 已知，只看 θ；
+2. 假裝 θ 已知，只看 a、b；
+3. 輪流做。
+
+「假裝其他參數已知時，這一塊的後驗」，就是這一塊的**完整條件分配**。下面兩個技巧，讓每一塊的完整條件分配都變成常態。
+
+### Pólya–Gamma：讓每一塊都變成常態
+
+logistic 模型裡，a、b、θ 的完整條件分配不是常見的分配。Polson、Scott 與 Windle（2013）加了一個輔助變數，讓它變成常態。
+
+先定義符號：
+
+- y_ji：第 j 人第 i 題的作答（0 或 1）。
+- η_ji：logit 裡的式子。2PL 是 η_ji = a_i(θ_j − b_i)。
+- ω_ji：替這一筆作答加的輔助變數，只取正值。它服從 Pólya–Gamma 分配。這個分配的細節不用知道，系統會處理。
+
+技巧分三步：
+
+1. 每一筆作答加一個 ω_ji。
+2. 給定 ω_ji，令 z_ji = (y_ji − 1/2) / ω_ji。
+3. 這時 z_ji 就像一筆常態資料：平均數是 η_ji，精確度是 ω_ji。
+
+所以給定 ω，處理 θ、a、b 就像做加權迴歸，權重是 ω。完整條件分配都是常態。有下界的參數（例如 a > 0）是截斷常態。
+
+三種估計法對 ω 的處理不同：
+
+- ECM 用 ω 的期望值；
+- Gibbs 抽 ω；
+- CAVI 給 ω 一個近似分配。
+
+宣告的模型裡，ω 由系統管理，你不會碰到它。
+
+### 常態的完整條件分配怎麼存：normal part
+
+一個常態分配 N(μ, 1/p) 可以用兩個數存起來：
+
+- 精確度 `prec` = p = 1 / 變異數；
+- 線性項 `num` = μ × p，也就是平均數 × 精確度。
+
+為什麼叫「線性項」：把常態密度取 log，寫成參數 x 的函數，是 −(p/2)x² + (μp)x + 常數。x 的一次項係數就是 μp。
+
+後驗 ∝ 概似 × 先驗。密度相乘，就是 log 密度相加。所以兩個常態相乘還是常態，而且精確度相加、線性項相加。資料和先驗的貢獻**直接相加**就好：
+
+```{r part-demo}
+p <- normal_part(prec = 4, num = 2) + normal_prior(mean = 0, sd = 1)
+p
+p$num / p$prec
+set.seed(1)
+draw(p)
+```
+
+**逐行說明**
+
+1. 這一行有三件事：
+   - `normal_part(prec = 4, num = 2)`：資料給的部分。平均數 = 2/4 = 0.5，變異數 = 1/4。
+   - `normal_prior(mean = 0, sd = 1)`：先驗 N(0, 1)。它被換成精確度 1、線性項 0。注意第二個數是 **SD**。
+   - `+`：精確度 4 + 1 = 5，線性項 2 + 0 = 2。
+2. 印出這個常態。
+3. `p$num / p$prec`：眾數。常態的眾數等於平均數，也就是線性項 / 精確度。**ECM 的一步就是移到這裡。**
+4. 固定亂數，讓結果可以重現。
+5. `draw(p)`：從這個常態抽一個值。**Gibbs 的一步就是這樣。**
+
+**輸出怎麼讀**
+
+- 第一段：
+  - `normal part of 1 value(s)`：存了 1 個參數的常態。
+  - 後面的英文提醒：存的是精確度和線性項；`mean = num / prec`、`sd = 1 / sqrt(prec)`。
+  - 表的 `1` 是列號。`mean` 是 2/5 = 0.4，`sd` 是 1/√5 ≈ 0.447。
+- 第二段：眾數 0.4，和 `mean` 相同。
+- 第三段：抽到的一個值，這次是 0.12。每次抽都不同；固定亂數之後，結果才能重現。
+
+宣告的模型裡，系統替每個參數做同一件事：把模型裡所有用到它的部分加起來。
+
+### ECM：移到條件分配的眾數
+
+θ 一人一個，人多時參數非常多。EM（Dempster, Laird & Rubin, 1977）不估每個人的 θ，而是把它積掉。每一輪做兩步。
+
+**E 步：** 看不到的東西不估，改用期望值。
+
+- θ：用積分點對 θ 平均。每個人依自己的後驗加權。
+- ω：換成期望值 E[ω_ji] = tanh(η_ji/2) / (2η_ji)。tanh 是雙曲正切函數。只要知道：|η| 愈大，E[ω] 愈小。
+
+**M 步：** 其他參數（a、b）移到最高點。
+
+**ECM**（Meng & Rubin, 1993）把 M 步拆成一塊一塊做，叫「條件最大化」：
+
+- 先 a、再 b；
+- 每一塊移到它的完整條件分配的眾數 m/p；
+- 這個完整條件分配已經對 θ 平均過（E 步）；
+- m 是線性項（上面的 `num`），p 是精確度（上面的 `prec`）。
+
+ECM 的保證：每一步都**不讓目標值下降**。目標值是 θ 積掉之後的 log 後驗。
+
+停下來的點就是後驗眾數。標準誤由目標值在這一點的曲率算出。θ 看不到時，這個曲率要用 Louis（1982）的公式算。第 3 節的輸出會再看到它。
+
+### Gibbs：從條件分配抽一個值
+
+Gibbs 抽樣用同一個條件分配。但它不移到眾數，而是**抽一個值**：
+
+1. 先給所有參數一個起始值；
+2. 抽 ω；假裝 a、b 已知，抽 θ；
+3. 假裝 θ 已知，抽 a、b；
+4. 回到第 2 步，重複幾千次。
+
+重複夠多次之後，抽出來的值就是後驗的樣本。Gibbs 不積掉 θ：θ 也一起抽。
+
+### CAVI：把條件分配當成近似分配
+
+CAVI（座標上升變分推論；Blei, Kucukelbir & McAuliffe, 2017）用一個簡單的分配 q 近似後驗。
+
+- q 拆成每一塊各一個，例如 q(θ_j)、q(a_i)、q(b_i)。
+- 每一塊的 q，和這一塊的完整條件分配同一型（例如常態）。
+- 差別是：完整條件分配裡用到的其他參數，換成它們在 q 下的期望值。
+- ω 的部分用 Durante 與 Rigon（2019）的做法：q(ω) 也是 Pólya–Gamma 分配。
+- 輪流更新每一塊的 q，ELBO 就不會下降。
+
+### 三種用法放在一起
+
+| | ECM | Gibbs | CAVI |
+|---|---|---|---|
+| 對每一塊做什麼 | 移到條件分配的**眾數** | 從條件分配**抽一個值** | 把條件分配本身當成這一塊的近似分配 q |
+| 看不到的東西（θ、ω） | 用期望值（積分）代替 | 也抽 | 用期望值代替 |
+| 得到 | 一個點（後驗眾數）與標準誤 | 後驗的樣本 | 每塊一個近似分配 q |
+| 每一步保證 | 目標值不下降 | 鏈若已經服從後驗，做完這一步仍服從後驗 | ELBO 不下降 |
+
+所以三種估計法共用同一份模型、同一份步驟清單。ECM 是這個套件的主要估計法：它快，而且直接給標準誤。
+
+## 2. 宣告模型：2PL
+
+### JAGS 的寫法
+
+```
+model {
+  for (j in 1:N) { theta[j] ~ dnorm(0, 1)
+    for (i in 1:K) { logit(p[j,i]) <- a[i] * (theta[j] - b[i]); Y[j,i] ~ dbern(p[j,i]) } }
+  for (i in 1:K) { a[i] ~ dnorm(1, 1) T(0,); b[i] ~ dnorm(0, 1/9) }
+}
+```
+
+**逐句說明**
+
+- `~` 讀作「服從」，`<-` 讀作「定義成」。
+- j 是人（共 N 人），i 是題（共 K 題）。
+- JAGS 的 `dnorm(平均數, 精確度)`：第二個數是**精確度**。`dnorm(0, 1/9)` 是平均 0、SD 3 的常態。
+- 第 2 行：每個人的 θ 服從 N(0, 1)。
+- 第 3 行：2PL。作答 Y 服從伯努利分配，答對機率是 p。
+- 第 4 行：a 服從 N(1, 1)，但只取 0 以上（`T(0,)`）；b 服從 N(0, 3²)。
+
+### 模擬資料
+
+```{r blk-irt-data}
+set.seed(11)
+N <- 500; K <- 10
+a_true <- seq(0.6, 2, length.out = K)
+b_true <- seq(-2.5, 2.5, length.out = K)
+theta_true <- rnorm(N)
+Y <- matrix(rbinom(N * K, 1, plogis(sweep(outer(theta_true, a_true), 2, a_true * b_true))), N, K)
+```
+
+**逐行說明**
+
+1. 固定亂數。
+2. 500 人、10 題。
+3. 鑑別度 a 從 0.6 到 2，等距排列。
+4. 難度 b 從 −2.5 到 2.5：第 1 題很容易，第 10 題很難。
+5. 每人的能力從 N(0, 1) 抽。
+6. 模擬作答。由內往外讀：
+   - `outer()` 得到 a_i θ_j（人 × 題）；
+   - `sweep()` 每一欄減掉 a_i b_i，得到 a_i(θ_j − b_i)；
+   - `plogis()` 換成答對機率；
+   - `rbinom()` 抽 0/1；`matrix(..., N, K)` 排成人 × 題。
+
+**輸出怎麼讀**
+
+- 這一段沒有輸出，只建立資料 `Y`（500 × 10 的 0/1 矩陣）。
+
+### 用 `block_model()` 宣告
+
+```{r blk-model}
+m2pl <- block_model(Y = Y,
+  theta[person] ~ normal(0, 1),
+  a[item] ~ normal(1, 1, lower = 0),
+  b[item] ~ normal(0, 3),
+  Y ~ bernoulli_logit(a * (theta - b)))
+m2pl
+```
+
+**逐行說明**
+
+- `Y = Y`：資料。左邊的 `Y` 是式子裡用的名字，右邊的 `Y` 是 R 裡的矩陣。矩陣一律是「人 × 題」。
+- `theta[person] ~ normal(0, 1)`：θ 一人一個，服從 N(0, 1)。
+  - `[person]` 是「一人一個值」，`[item]` 是「一題一個值」。
+  - 這兩個字是固定的，不能改名。
+  - 不寫方括號，就是整個模型只有一個值。
+  - `normal()` 的第二個數是 **SD**，和 R 的 `rnorm()` 一樣。它不是 JAGS 的精確度。
+- `a[item] ~ normal(1, 1, lower = 0)`：a 一題一個，N(1, 1) 只取 0 以上。這就是 JAGS 的 `T(0,)`。
+- `b[item] ~ normal(0, 3)`：b 一題一個，N(0, 3²)。
+- `Y ~ bernoulli_logit(a * (theta - b))`：作答 Y 服從伯努利分配，logit 是 a(θ − b)。
+  - 式子裡不用寫下標。系統知道 θ 是一人一個、a 是一題一個。
+- 最後一行印出模型。
+
+**輸出怎麼讀**
+
+- 印出來的是模型的式子，分成資料（`Data`）和先驗（`Priors`）兩段。
+- 第一行 `j = person, N = 500; i = item, K = 10`：下標 j 是人，共 500 人；i 是題，共 10 題。下標是系統自動加的。
+- `logit P(Yⱼᵢ = 1) = aᵢ(θⱼ − bᵢ)`：第 j 人答對第 i 題的機率。
+- `N⁺(1, 1)`：上標 ⁺ 表示只取 0 以上。
+- 印出來的 N( ) 第二個數是**變異數**，所以 b 是 `N(0, 9)`。
+- 同一個先驗有三種寫法：`block_model()` 寫 SD（3），印出來寫變異數（9），JAGS 寫精確度（1/9）。
+- 要放進論文：`equations(m2pl, format = "latex")` 給 LaTeX 的 `aligned` 區塊。格式和內建模型的 `equations()` 相同。
+
+**還可以寫什麼**
+
+- 定義：先寫 `eta <- a * (theta - b)`，之後寫 `Y ~ bernoulli_logit(eta)`。這和 rethinking 套件（McElreath 的貝氏教科書配套套件）的 `ulam()` 寫法一樣。
+- 常態的資料：`logT ~ normal(lambda - zeta, sqrt(sigma2))`（第 6 節）。
+- 變異數：`sigma2[item] ~ half_t(3, 1)`。意思是 SD σ_i = √σ²_i 服從自由度 3、尺度 1 的 half-t 分配（只取正值的 t 分配）。
+  - 也可以寫 `inv_gamma(形狀, 尺度)`：變異數本身服從逆伽瑪分配。
+  - 用 half-t 時，ECM 在一維上直接找這個變異數的眾數。
+  - 用 half-t 時，Gibbs 加一個輔助變數（Huang & Wand, 2013），把 half-t 變成逆伽瑪。所以條件分配仍有公式。
+- 式子可以用 `+ - * / ^ exp log sqrt`。
+
+## 3. 三種估計法
+
+三種估計法都用同一份步驟清單。這裡只有一步：`step_gibbs(theta, a, b)`。
+
+- 意思是：依序處理 θ、a、b，每一塊用它的完整條件分配。
+- 名字裡的 gibbs，只表示「用完整條件分配」。
+- ECM 把它當成條件最大化，Gibbs 當成抽樣，CAVI 當成更新 q。
+
+### ECM：`ecm()`
+
+```{r est-ecm}
+steps <- list(step_gibbs(theta, a, b))
+fit_e <- ecm(m2pl, steps)
+fit_e
+```
+
+**逐行說明**
+
+1. `steps`：步驟一定放在 `list()` 裡，可以放好幾個。參數名字不加引號。
+2. `ecm(m2pl, steps)`：
+   - θ 一人一個，會被積掉（E 步），所以 ECM 自動略過步驟裡的 `theta`。寫上它，是為了同一份步驟也能給 Gibbs 用。
+   - 預設是後驗眾數（`prior = "map"`）。要最大概似估計，寫 `prior = "ml"`。
+   - 不用寫 ω、先驗、起始值：系統從模型拿。
+   - `steps` 也可以不寫。系統會自己選：能算眾數 m/p 的用 m/p，不能的沿梯度往上走。
+3. 印出結果。
+
+**輸出怎麼讀**
+
+- 第一行：
+  - `converged after 31 iterations`：收斂了，做了 31 次疊代。
+  - `(2 rounds of the grid)`：積分點擺了 2 回合（下一段 `algorithm()` 的 `E-step` 會解釋）。
+  - `log posterior -2408.0951`：目標值，也就是 θ 積掉之後的 log 後驗。`prior = "ml"` 時這裡寫 `log-likelihood`。
+- 表：每個參數一列。
+  - `est`：估計值（後驗眾數）。
+  - `se`：標準誤。由目標值的 Hessian 算出。Hessian 是二次微分，也就是曲率：山頂愈尖，標準誤愈小。
+- b[1] 的標準誤最大（0.761）。第 1 題很容易，幾乎所有人都答對，所以資訊少。
+
+```{r est-ecm-algorithm}
+algorithm(fit_e)
+```
+
+**逐行說明**
+
+1. `algorithm(fit_e)`：用式子列出 ECM 每一輪做什麼。要放進論文，寫 `algorithm(fit_e, format = "latex")`。
+
+**輸出怎麼讀**
+
+輸出分成五段。每一行左邊是式子，右邊（空四格之後）是說明。
+
+- `Model p`：模型本身，和 `m2pl` 印出來的一樣。第一行把模型寫成許多小塊的乘積（`∏ⱼ,ᵢ` 對每個人、每一題相乘）。
+- `Objective`：ECM 要讓它變大的目標值。
+  - ℓ(φ) 讀作「φ 的目標值」。φ 是沒有積掉的參數，這裡是 (a, b)。
+  - `Σⱼ log ∫ p(yⱼ, θⱼ | φ) dθⱼ`：每個人把 θ 積掉之後的 log 概似，再對人加總。
+  - `+ log p(φ)`：a、b 的先驗（`prior = "map"`）。`prior = "ml"` 時沒有這一項。
+- `E-step`：
+  - `Q(φ | φ′)`：「看得到 θ 時的 log 後驗」，對 θ 的後驗取期望值。φ′ 是目前的值。M 步讓 Q 變大，目標值就不會變小（Dempster et al., 1977）。
+  - `θⱼ = mⱼ + sⱼ·zₖ`：期望值用積分點算。zₖ 是 21 個 Gauss–Hermite 點（一種挑點和權重的規則，專門用在「常態 × 平滑函數」的積分）。
+    - mⱼ、sⱼ 是第 j 人的後驗平均數和 SD，所以每個人有自己的 21 個點。這就是「自適應」（adaptive）。
+    - `fixed within a round and recentred between rounds`：一回合裡點不動；一回合結束後，依新的後驗重新擺。點不動時，目標值是一個固定的函數，ECM 才保證它不下降。
+  - `ω̄ⱼᵢ = tanh(ηⱼᵢ/2)/(2ηⱼᵢ)`：ω 換成它的期望值（上面加一橫表示期望值），在每個積分點各算一次。ηⱼᵢ = aᵢ(θⱼ − bᵢ)。
+    - `Polya-Gamma minorizer`：換成期望值之後，得到一個新函數。它處處不大於原本的目標值，而且在目前的點和目標值相等。所以讓新函數變大，目標值也不會變小。
+  - `κⱼᵢ = Yⱼᵢ − ½`：下面 m 的式子會用到。
+- `M-step`：a、b 依序移到條件分配的眾數。
+  - `aᵢ ← mᵢ/pᵢ`：← 讀作「更新成」。眾數是 m/p：p 是精確度，m 是線性項（第 1 節）。
+  - `clipped to [0, Inf]`：a 有下界 0。眾數若小於 0，就停在 0。
+  - `pᵢ = 1 + ...`、`pᵢ = 1/9 + ...`：第一項是先驗的精確度。a 的先驗 SD 是 1，b 的先驗 SD 是 3，所以是 1 和 1/9。
+  - `mᵢ = 1 + ...`：a 的先驗平均數是 1，所以線性項多 1/1 = 1；b 的先驗平均數是 0，沒有這一項。
+  - 加總 `Σⱼ E[...]`：資料的貢獻。E[...] 是對 θⱼ 的後驗取期望值：在每個積分點各算一次，再按後驗權重平均。
+  - 注意：平均的是 (θⱼ − bᵢ)²，不是先平均 θ 再平方。
+  - `the mode of the Gibbs step`：和 Gibbs 用的是同一個條件分配，只是取眾數，不抽樣（對照第 5 節的 Gibbs 版）。
+- `Then`：
+  - `E`：上面 E[...] 的意思。
+  - `acceleration`：SQUAREM，讓 EM 少跑幾次的加速法，結果不變。`run_em()` 是 ECM 在背後用的函數（第 9 節會直接用它）。
+  - `standard errors`：標準誤用的 Hessian 由 Louis 公式算。θ 看不到，所以曲率分成兩塊：
+    - 第一塊：「假如看得到 θ」的曲率，按 θ 的後驗平均。
+    - 第二塊：減掉「因為看不到 θ 而損失的資訊」。算法是先算每個人在每個積分點的分數函數（score，log 概似對參數的一次微分；和測驗分數無關），再看它在各積分點之間的變異。
+    - 兩塊都直接從宣告的式子微分得到，不用數值微分。
+
+### 積分點的另一種擺法：`quadrature = "ba81"`
+
+```{r est-ecm-ba81}
+t_adapt <- system.time(ecm(m2pl, steps))[["elapsed"]]
+t_ba81 <- system.time(fit_b <- ecm(m2pl, steps, quadrature = "ba81"))[["elapsed"]]
+c(adaptive = fit_e$loglik, ba81 = fit_b$loglik)
+fit_b$adaptive_gap
+round(c(adaptive_seconds = t_adapt, ba81_seconds = t_ba81), 2)
+```
+
+**逐行說明**
+
+1. 再跑一次預設（自適應）的 ECM，只為了計時。`system.time(...)[["elapsed"]]` 是花的秒數。
+2. 用 ba81 的擺法跑 ECM，同時計時。
+   - ba81 是 Bock 與 Aitkin（1981）的縮寫。
+   - 每個人用同一組積分點（預設 41 個），不依每個人的後驗擺。
+3. 並排兩種擺法的目標值。
+4. `adaptive_gap`：在 ba81 的估計值上，改用自適應積分點再算一次目標值，兩者的差。
+5. 兩種擺法各花幾秒。
+
+**輸出怎麼讀**
+
+- 第一段：兩個目標值都是 −2408.095，相同。R 預設只印 7 位有效數字，所以只看得到小數 3 位；差多少看第二段。
+- 第二段：`gap` 是 `r format(signif(fit_b$adaptive_gap, 3))`。`e-06` 是科學記號，意思是 × 10⁻⁶，所以非常接近 0。
+  - 兩種擺法在這份資料給同一個答案。
+  - `gap` 超過 0.5 時，`ecm()` 會警告：共用的點不夠密。
+- 第三段：這份資料 ba81 約 `r round(t_ba81, 1)` 秒，自適應約 `r round(t_adapt, 1)` 秒。
+- ba81 為什麼快：
+  - 作答只透過 θ 和每個人有關。
+  - 大家用同一組點，所以在同一個點上，所有人的 η 都一樣。
+  - 因此可以先把人加總，得到每個點、每題的「期望人數」和「期望答對人數」。
+  - M 步只在「點 × 題」上算，不用逐人算。人多時差別更大。
+- 它仍然是 ECM：只換了 E 步的數值積分，M 步的條件最大化不變。
+- 限制：如果某個潛在變數的後驗很窄，共用的點會不夠密。例子是第 6 節的速度 ζ（由很多題的時間決定）。ζ 在第 6 節是用公式積掉的，不受影響。
+
+### Gibbs：`gibbs()`
+
+```{r est-gibbs}
+fit_g <- gibbs(m2pl, steps, n_iter = 2000)
+fit_g
+```
+
+**逐行說明**
+
+1. 同一個模型、同一份步驟，交給 `gibbs()`。
+   - 每條鏈 2000 次，前一半是 burn-in。預設 2 條鏈。
+   - ω 由系統每一輪自動抽一次。
+   - θ 不積掉，也一起抽。
+   - 一題一個的參數，每次抽樣值都存。一人一個的 θ 只存後驗平均數與 SD（`fit_g$mean$theta`）。
+   - 不用寫起始值：系統從先驗平均附近開始。
+2. 印出結果。
+
+**輸出怎麼讀**
+
+- 第一行：2 條鏈、每條 2000 次、花了幾秒。
+  - `burn-in 1000, thin 1`：前 1000 次丟掉；`thin 1` 表示之後每一次都留。
+- 表：每個參數一列。
+  - `mean`、`sd`：後驗平均數與 SD。
+  - `q2.5`、`q97.5`：2.5% 與 97.5% 分位數，兩者之間是 95% 區間。
+  - `rhat`、`ess`：收斂診斷 R̂ 和 ESS。
+- `max R-hat 1.203, min ESS 21`：所有參數裡最大的 R̂ 和最小的 ESS。
+- `posterior means kept for theta (fit$mean)`：θ 只存了後驗平均數與 SD，放在 `fit_g$mean`。
+- `Warning`：有參數 R̂ > 1.05 或 ESS < 100。
+  - 括號裡只列最差的 3 個，例如 `a[10] 21` 是 a[10] 的 ESS 只有 21。
+  - 列出的都是偏易（第 1 題）或偏難（第 9、10 題）的題目：這些題目混合慢。
+- 最後一行是建議，分三種情況：
+  - `a direction identified only by the prior` → `step_shift()`：只靠先驗決定的方向（第 5 節）。
+  - `very easy or difficult items` → `step_mala(a, b)`：極易、極難的題目（第 5 節）。
+  - `chains in different modes` → `data-based init`：鏈停在不同的眾數，改用資料算的起始值（第 6 節）。
+- 換步驟可以改善，但不能完全解決。ECM 沒有這個問題：它不抽樣。
+
+### CAVI：`vi()`
+
+```{r est-vi}
+fit_v <- vi(m2pl, steps)
+fit_v
+```
+
+**逐行說明**
+
+1. 同一個模型、同一份步驟，交給 `vi()`。
+2. 印出 q 的平均數與 SD。
+
+**輸出怎麼讀**
+
+- 第一行：
+  - `converged after 342 sweeps`：做了 342 次疊代（sweep）。
+  - `(3 rounds)`：積分點重新擺了 3 回合，和 ECM 一樣。
+  - `ELBO -2439.6597`：CAVI 的目標值。它和 ECM 的目標值是不同的量，不能互相比大小。
+  - 最後是花的秒數。
+- 表：每個參數的 q 的平均數（`mean`）與 SD（`sd`）。
+- 最後一行提醒：平均場的 SD 太小；要區間請用 `gibbs()`。下面的比較會看到。
+
+```{r est-vi-algorithm}
+algorithm(fit_v)
+```
+
+**逐行說明**
+
+1. 用平均場變分貝氏的寫法列出演算法：先寫模型 p，再寫近似 q，再寫 q 的每一塊。
+
+**輸出怎麼讀**
+
+- 注意符號：這裡的 p 有兩個意思。`Model p` 的 p 是模型的機率密度；下面 `pᵢ` 的 p 是精確度。
+- `Model p`：模型 p 是許多小塊的乘積。
+  - `∏ⱼ,ᵢ` 是對每個人、每一題相乘；`∏ⱼ` 是對每個人；`∏ᵢ` 是對每一題。
+  - `p(Yⱼᵢ | aᵢ, θⱼ, bᵢ)` 讀作「給定 aᵢ、θⱼ、bᵢ 時，Yⱼᵢ 的分配」。
+  - 下面幾行是每一塊的式子，和 `m2pl` 印出來的一樣。
+- `Approximation q`：近似分配 q 也拆成小塊相乘。
+  - 各塊之間假設獨立，這就是平均場（`mean field: one factor per block`）。
+  - 唯一的例外是 ω 依賴 θ：`q(ωⱼᵢ | θⱼ)`。
+- `log q*(x) = E₋ₓ[log p(·)] + const`：CAVI 的更新規則（Bishop, 2006, 式 10.9）。
+  - x 是某一塊參數，q*(x) 是這一塊最好的 q。
+  - E₋ₓ 是「對**其他塊**的 q 取期望值」。
+  - const 是和 x 無關的常數。
+  - CAVI 就是輪流對每一塊套用這條規則。
+- `Factors of q`：套用這條規則之後，每一塊的形式。
+  - `q(θⱼ) ∝ exp E[log p(·)]`：θ 的 q 不限定是常態（`free form`），直接在 21 個積分點上算。
+  - `q(ωⱼᵢ | θⱼ) = PG(1, cⱼᵢ)`：ω 的 q 是 Pólya–Gamma 分配。下一行說 cⱼᵢ² 是 η 平方的期望值。
+  - `q(aᵢ) = N⁺(mᵢ/pᵢ, 1/pᵢ)`：a 的 q 是只取 0 以上的常態。
+  - 下一行的 pᵢ 和 ECM 的 p 是同一個式子：`1` 是先驗，`Σⱼ E[ωⱼᵢ (θⱼ − bᵢ)²]` 是資料。mᵢ 是對應的線性項。
+  - `q(bᵢ)` 同理，先驗精確度是 1/9。
+- `CAVI:` 兩行：
+  - `one sweep`：一次疊代依上面的順序更新每一塊，每一步都讓 ELBO 變大。
+  - `rounds`：和 `ecm()` 一樣，回合之間重新擺積分點；ELBO 的變化小於 `tol` 就停。
+- 要放進論文：`algorithm(fit_v, format = "latex")`。
+
+### 三種估計法放在一起
+
+```{r est-compare}
+sg <- summary(fit_g)
+cmp <- data.frame(parameter = sg$parameter,
+                  ecm_est = fit_e$estimates$est, gibbs_mean = sg$mean, cavi_mean = fit_v$summary$mean,
+                  ecm_se = fit_e$estimates$se, gibbs_sd = sg$sd, cavi_sd = fit_v$summary$sd)
+cmp[, -1] <- round(cmp[, -1], 3)
+cmp[c(1, 5, 10, 11, 15, 20), ]
+round(c(ecm = t_adapt, gibbs = fit_g$time, cavi = fit_v$time), 1)
+```
+
+**逐行說明**
+
+1. Gibbs 的摘要表。
+2. 把三種估計法的估計值（或平均數）和標準誤（或 SD）並排，ECM 在最前面。
+   - 三個表的參數順序相同：a[1] 到 a[10]，再 b[1] 到 b[10]。
+3. 數字取到小數 3 位。`cmp[, -1]` 是「第 1 欄以外」：第 1 欄是名字，不取。
+4. 挑幾列來看：第 1、5、10 列是 a[1]、a[5]、a[10]；第 11、15、20 列是 b[1]、b[5]、b[10]。
+5. 三種估計法各花幾秒。ECM 用上一段計時的 `t_adapt`。
+
+**輸出怎麼讀**
+
+- 表最左邊沒有標題的數字是列號（1、5、10、11、15、20）。
+- **估計值：** 大多數題目三欄都接近。差比較多的是極端題，例如 b[1]（−2.981、−3.429、−2.985）和 a[10]（1.574、1.699、1.564）。
+  - ECM 給的是眾數，Gibbs 給的是平均數。極端題的後驗偏斜，所以兩者不同。
+  - CAVI 雖然報平均數，但它的 q 是對稱的常態，中心落在眾數附近。所以 CAVI 的數字接近 ECM，不接近 Gibbs。
+  - 另外，Gibbs 只跑 2000 次。極端題的 ESS 只有 29–69，平均數本身也有 Monte Carlo 誤差。
+- **標準誤：** ECM 的標準誤和 Gibbs 的後驗 SD 接近。
+  - CAVI 的 SD **明顯太小**。例如 a[10]：CAVI 0.051，另外兩欄是 0.331 和 0.324。
+  - 原因：CAVI 假設參數之間互相獨立，忽略了 a 和 b、a 和 θ 之間的相關。
+  - 這是平均場變分法的已知性質。
+- **時間：** 最後一行，單位是秒。這份資料 ECM 約 `r round(t_adapt, 1)` 秒、Gibbs 約 `r round(fit_g$time, 1)` 秒、CAVI 約 `r round(fit_v$time, 1)` 秒。
+- **怎麼選：**
+  - 要點估計與標準誤（大多數情況）：ECM。
+  - 要區間、要完整的後驗：Gibbs。
+  - 只要近似的平均數：CAVI。資料大、模型大時，CAVI 才明顯比 Gibbs 快。
+
+### 模型少了一項嗎：`score_test(fit, add = )`
+
+估計完之後，常要問：模型是不是少了一項？例如差異試題功能（DIF）：同樣能力的兩組人，某一題的答對機率不同。
+
+- 完整的做法是估兩個模型（有這一項、沒有這一項），再比 log 概似。這是概似比（LR）檢定。
+- Lagrange 乘數（LM）檢定，又叫分數（score）檢定，只要估**沒有這一項**的模型（Rao, 1948；IRT 的用法見 Glas, 1998, 1999；Glas & van der Linden, 2010）。
+- 想法：把新參數放進模型，但固定在 0。看目標值在 0 這一點往新參數方向的斜率（分數）。斜率大，表示這一項值得加。
+
+```{r lm-dif}
+set.seed(12)
+z <- rbinom(N, 1, 0.5)
+eta_dif <- sweep(outer(theta_true, a_true), 2, a_true * b_true)
+eta_dif[, 4] <- eta_dif[, 4] + 0.8 * z
+Y_dif <- matrix(rbinom(N * K, 1, plogis(eta_dif)), N, K)
+m_dif <- block_model(Y = Y_dif, z = z,
+  theta[person] ~ normal(0, 1),
+  a[item] ~ normal(1, 1, lower = 0),
+  b[item] ~ normal(0, 3),
+  Y ~ bernoulli_logit(a * (theta - b)))
+fit_dif <- ecm(m_dif, prior = "ml")
+lm_dif <- score_test(fit_dif, add = Y ~ delta[item] * z)
+print(lm_dif)
+```
+
+**逐行說明**
+
+1. 固定亂數。
+2. `z`：每個人的組別，0 或 1，各半。
+3. 用第 2 節的 a、b、θ 算 a_i(θ_j − b_i)。
+4. 第 4 題加上 DIF：z = 1 的人，logit 多 0.8。同樣的能力，z = 1 的人比較容易答對第 4 題。
+5. 模擬作答。
+6. 宣告模型。和 `m2pl` 一樣，只多了資料 `z = z`。
+   - `z` 是長度 N 的向量，系統知道它是一人一個值。
+   - 模型裡沒有用到 `z`。它是為了下面的檢定才放進來。
+   - 也可以不放進模型，改寫 `score_test(..., data = list(z = z))`。
+7. 用 ECM 估計沒有 DIF 的模型。LM 檢定用最大概似估計，所以寫 `prior = "ml"`。
+8. 檢定。`add = Y ~ delta[item] * z` 的意思是：
+   - 左邊的 `Y`：加在資料 Y 的那一部分。
+   - 右邊：加在 logit 上的一項 δ_i z_j。若是常態的資料（例如 `logT`），就是加在平均數上。
+   - `delta[item]`：新的參數，一題一個。方括號和 `block_model()` 的寫法一樣；不寫方括號就是所有題目共用一個值。
+   - 虛無假設是 δ = 0，也就是現在估計的模型。
+9. 印出結果。結果是一個資料框；`print()` 照檢定的格式印出（上面多一行說明檢定什麼）。
+
+**輸出怎麼讀**
+
+- 第一行：檢定的是 `Y ~ a * (theta - b) + delta * z`，在 δ = 0 的最大概似估計上算。
+- `all`：10 題的 δ 一起檢定，自由度 10。統計量 `r round(lm_dif$statistic[1], 2)`，p 值 `r format.pval(lm_dif$p.value[1], digits = 2, eps = 1e-4)`。
+- 下面每一題一列：只讓那一題的 δ 自由，自由度 1。
+  - 第 4 題的統計量最大（`r round(lm_dif$statistic[5], 2)`），Holm 校正後的 p 值是 `r format.pval(lm_dif$p.holm[5], digits = 2, eps = 1e-4)`。只有它被標出來。
+  - Holm 校正：同時檢定 10 題，所以把 p 值放大，控制「至少錯標一題」的機率。
+  - `estimate`：如果只放開這一題，δ 大約會估成多少（一步估計，Sörbom, 1989）。第 4 題是 `r round(lm_dif$estimate[5], 2)`，真值是 0.8；只有 500 人，所以估計值有誤差（下一段的完整估計也一樣）。
+  - 其他題的 p 值都大於 0.01；第 3 題沒校正的 p 值是 `r round(lm_dif$p.value[4], 3)`，Holm 校正後是 `r round(lm_dif$p.holm[4], 2)`，不算顯著。
+- 怎麼算的：
+  - 分數（斜率）：用 Fisher identity。看不到 θ，就把「看得到 θ 時的斜率」對 θ 的後驗平均。和 ECM 的 E 步同一組權重。
+  - 資訊（曲率）：用 Louis 公式，和標準誤同一個算法。
+  - 原本的參數 a、b 也是估出來的，所以要從新參數的資訊裡扣掉它們能解釋的部分：W = I_δδ − I_δφ I_φφ⁻¹ I_φδ（φ 是 a、b）。統計量是 s′W⁻¹s。
+- 注意：這裡 θ 和 z 無關（兩組能力相同）。如果兩組平均能力不同，又沒有放進模型，每一題都會看起來有 DIF。這時要把組別放進 θ 的先驗：`theta[person] ~ normal(g * z, 1)`。這樣「所有題一起」的檢定會少 1 個自由度，因為所有題一起平移的方向被 g 吸收了；印出來會說明。
+
+LM 檢定是 LR 檢定的近似。這裡直接估有 δ 的模型來比：
+
+```{r lm-dif-lr}
+m_alt <- block_model(Y = Y_dif, z = z,
+  theta[person] ~ normal(0, 1),
+  a[item] ~ normal(1, 1, lower = 0),
+  b[item] ~ normal(0, 3),
+  delta[item] ~ normal(0, 1),
+  Y ~ bernoulli_logit(a * (theta - b) + delta * z))
+fit_alt <- ecm(m_alt, prior = "ml")
+c(LM = lm_dif$statistic[1], LR = 2 * (fit_alt$loglik - fit_dif$loglik))
+round(fit_alt$estimates$est[grep("^delta", fit_alt$estimates$parameter)][4], 2)
+```
+
+**逐行說明**
+
+1. 宣告有 δ 的模型：logit 多一項 `delta * z`，δ 一題一個。
+   - `delta[item] ~ normal(0, 1)` 只是宣告需要一個先驗；用 `prior = "ml"` 時，先驗不進入目標值。
+2. 用 ECM 估計。
+3. 並排兩個統計量：LM 只用了沒有 δ 的模型；LR 是 2 × 兩個模型的 log 概似差。
+4. 有 δ 的模型裡，第 4 題的 δ 估計值。
+
+**輸出怎麼讀**
+
+- 第一行：LM 是 `r round(lm_dif$statistic[1], 2)`，LR 是 `r round(2 * (fit_alt$loglik - fit_dif$loglik), 2)`，很接近。
+  - 樣本大時兩者相同（漸近相等）。
+  - 套件的模擬（500 人、8 題、100 次）：兩者的相關是 0.999；沒有 DIF 時，5% 水準的拒絕率是 5%。
+- 第二行：第 4 題 δ 的估計值 `r round(fit_alt$estimates$est[grep("^delta", fit_alt$estimates$parameter)][4], 2)`，和上一段的一步估計 `r round(lm_dif$estimate[5], 2)` 接近。
+- LM 的好處：只估一個模型，就能一次檢查很多種可能少掉的項（每一題、每一種 z）。
+
+## 4. 檢查估計法
+
+自己組的估計法，最怕「看起來收斂，其實是錯的」。三種估計法各有一個檢查：
+
+| 估計法 | 檢查 | 檢查什麼 |
+|---|---|---|
+| ECM | `check_ecm(model, steps)` | 每一步都不讓目標值下降；E 步算對了（Fisher identity）；停在最大值 |
+| Gibbs | `check_sampler(model, steps =)` | 每一步都保持後驗（Geweke, 2004） |
+| CAVI | `check_vi(model, steps)` | ELBO 每一輪都不下降；停在 ELBO 的最大值 |
+
+宣告的模型會自動從先驗抽參數、從模型模擬資料。所以你不用寫任何檢查用的程式。
+
+### ECM：`check_ecm()`
+
+**道理：** EM 不直接最大化目標值（太難算）。它每一輪做兩件事：
+
+- E 步：在目前的參數 x 上，做一個替代函數，記作 Q( · | x)。「 · 」是下一步的參數。
+- M 步：讓 Q 變大。
+
+Q 變大，目標值就不會變小。所以要檢查三件事：
+
+1. 每一步都讓 Q 變大；
+2. 在目前的點 x，Q 的斜率和目標值的斜率相同。這叫 **Fisher identity**。不相同，表示 E 步算錯了；
+3. 最後停在目標值的最高點。
+
+```{r check-ecm}
+print(check_ecm(m2pl, steps, n_start = 3, seed = 1))
+```
+
+**逐行說明**
+
+1. `check_ecm()`：
+   - 從先驗抽 3 組起始值（`n_start = 3`），從每一組出發，檢查每一步；
+   - 再擬合一次，檢查收斂點；
+   - `seed = 1` 固定亂數；`print()` 讓結果用它自己的格式印出。
+
+**輸出怎麼讀**
+
+- 第一行：3 組起始值，全部通過（`all checks passed`）。
+- 表太寬，所以分兩段印。上段是 `check`（檢查的名稱），下段是數字。兩段的列一一對應：上段第 1 列配下段第 1 列。
+- 下段的欄：
+  - `worst`：幾組起始值裡最差的數字。
+  - `limit`：容許的上限。`1e-08` 是科學記號，等於 10⁻⁸。
+  - `passed`：`worst` 不超過 `limit` 就是 `TRUE`。
+  - `detail`：只有不通過時才寫原因，所以這裡是空的。
+- 五列檢查：
+  - 第 1 列：每一步都讓 Q 不下降；`worst` 是最大的相對下降。
+  - 第 2 列：一次疊代之後，目標值不下降。
+  - 第 3 列：Fisher identity，目標值的梯度和 Q 的梯度的相對差。
+  - 第 4 列：從估計值出發，一般的最佳化器（`general optimizer`）還能讓目標值增加多少。接近 0 表示已在最高點。
+  - 第 5 列：估計值上最大的 |梯度|。接近 0 表示已在最高點。
+
+### Gibbs：`check_sampler()`
+
+**道理（Geweke 檢查）：**
+
+1. 從先驗抽一組參數。
+2. 反覆做兩件事：給定參數，模擬一份資料；給定這份資料，跑一步抽樣器，得到新的參數。
+3. 如果抽樣器的每一步都正確，鏈裡的參數整體來看仍然服從先驗。
+4. 所以比較「鏈裡的參數」和「直接從先驗抽的參數」。兩者的分配應該一樣。
+
+```{r check-sampler}
+m_small <- block_model(Y = Y[1:20, 1:4],
+  theta[person] ~ normal(0, 1),
+  a[item] ~ normal(1, 1, lower = 0),
+  b[item] ~ normal(0, 3),
+  Y ~ bernoulli_logit(a * (theta - b)))
+print(check_sampler(m_small, steps = steps, n_iter = 5e4, seed = 3), n = 3)
+```
+
+**逐行說明**
+
+1. 前 5 行：同一個 2PL，但只用前 20 人、4 題。
+   - Geweke 檢查要反覆模擬資料，所以用小一點的模型。
+   - 檢查只用到資料的大小（20 × 4）。資料的值會被模擬的值取代。
+   - ECM 和 CAVI 的檢查不用反覆模擬資料，所以用完整的資料。
+2. `check_sampler()`：跑 5 萬次（`5e4`），`seed = 3` 固定亂數。`print(..., n = 3)` 只印偏離最大的 3 個比較。
+
+**輸出怎麼讀**
+
+- 第二行：
+  - `50000 iterations (first 10% dropped)`：跑 5 萬次，前 10% 當 burn-in 丟掉。
+  - `P(parameter <= prior quantile) in the chain vs 10000 prior draws`：比較的量是「參數落在某個先驗分位數以下的比例」。鏈裡算一次，1 萬個先驗抽樣算一次。
+- 第三行：
+  - `40 comparisons` = 8 個參數（a[1]–a[4]、b[1]–b[4]）× 5 個先驗分位數。θ 沒有比較。
+  - `smallest Holm-adjusted p = 0.173: no evidence against the sampler`：最小的校正後 p 值是 0.173，沒有證據顯示抽樣器有錯。
+- 表的欄（同一個參數會出現好幾列，是不同的分位數）：
+  - `prob`：比較的先驗分位數。例如 0.90 是先驗的第 90 百分位數。
+  - `prior`：1 萬個先驗抽樣裡，落在這個分位數以下的比例。
+  - `sampler`：鏈裡同一個比例。兩者應該接近。
+  - `ess`：鏈裡這個比例的有效樣本數，用來算標準誤。
+  - `z`：兩者的差除以標準誤。
+  - `p.value`：單一檢定的 p 值。
+  - `p.holm`：Holm 校正後的 p 值。一次做 40 個檢定，p 值要調大，才不會因為檢定多而誤判。
+- 判斷看 `p.holm`，不看 `p.value`。最小的 `p.holm` 大於 .01 就算通過。這次最小是 0.173，通過。
+- a[3] 的 `p.value` 是 0.004，單看會以為有問題。但 40 個檢定裡出現一個這麼小的 p 值很正常，校正後是 0.173。
+
+### CAVI：`check_vi()`
+
+```{r check-vi}
+print(check_vi(m2pl, steps, n_start = 3, seed = 1))
+```
+
+**逐行說明**
+
+1. `check_vi()`：和 `check_ecm()` 同樣的想法，用在 CAVI。3 組起始值，固定亂數。
+
+**輸出怎麼讀**
+
+- 第一行：3 組起始值，全部通過。
+- 和 `check_ecm()` 一樣分兩段印。兩列都要 `passed = TRUE`：
+  - 第 1 列：ELBO 每一次疊代都不下降。
+  - 第 2 列：停在最大值。把任何一個 q 的平均數往上或往下推一點，ELBO 都不會變大。有變異數參數時，也推它的 q 的尺度。
+- 兩列的 `worst` 都是 0。
+- 這些檢查也能抓到寫錯的估計法。例如故意把 CAVI 裡的 E[a²] 寫成 (E[a])²，`check_vi()` 的第 2 列就不通過。
+
+## 5. 換步驟
+
+步驟清單決定「每一塊用什麼方法更新」。換步驟不會改變模型，只改變估計法走得快不快。
+
+ECM 用預設的步驟就夠了。這一節的兩種換法，主要是讓 **Gibbs** 混合得快一點。
+
+三種步驟在 ECM 和 Gibbs 裡的意思（後兩種在下面兩小節說明）：
+
+| 步驟 | ECM | Gibbs |
+|---|---|---|
+| `step_gibbs()` | 移到條件眾數 m/p | 從條件分配抽一個值 |
+| `step_mala()` | 沿梯度往上走幾步（廣義 EM，第 8 節） | MALA：沿梯度提議一個候選值，再決定接受或拒絕 |
+| `step_shift()` | 略過（θ 已積掉） | 把幾個參數一起平移 |
+
+### 極易、極難的題目：`step_mala(a, b)`
+
+**問題：**
+
+- 極易的題目，幾乎所有人都答對。資料分不太開 a 和 b，所以兩者的後驗高度相關。
+- Gibbs 一次只動一塊：先在 b 固定時動 a，再在 a 固定時動 b。
+- a 和 b 高度相關時，固定一個，另一個能動的範圍很窄。所以每一步都只能走一小步。
+
+**MALA**（Metropolis-adjusted Langevin algorithm；Roberts & Tweedie, 1996）：
+
+1. 從目前的值出發，往後驗變高的方向（梯度）走一步，再加一點隨機擾動，得到候選值。
+2. 依一個機率決定：接受候選值，或留在原地（Metropolis–Hastings 的規則）。
+3. 步長太大，常被拒絕；步長太小，走不動。
+
+MALA 可以讓每題的 (a, b) **一起**移動：
+
+```{r mala-ab}
+steps_mala <- list(step_mala(a, b), step_gibbs(theta, a, b))
+algorithm(m2pl, steps = steps_mala)
+```
+
+**逐行說明**
+
+1. 兩個步驟：
+   - 先用 MALA 一起移動每題的 (a, b)；
+   - 再照原本的 Gibbs 更新 θ、a、b。
+   - MALA 負責讓 (a, b) 一起大步走。Gibbs 步驟還是要更新 θ；順便也更新 a、b，不會出錯。
+2. 還沒跑，就先看每一步做什麼。`algorithm(model, steps =)` 預設寫出 Gibbs 的步驟。
+
+**輸出怎麼讀**
+
+- `Model p` 和上面相同，這裡略過。`Gibbs: one iteration` 是一次疊代的步驟，照順序做。
+- 第 1 步 `(log(aᵢ), bᵢ) ← MALA on log p(aᵢ, bᵢ | ·)`：
+  - `| ·` 讀作「給定其他所有參數」（最後的 `Notation` 也有寫）。
+  - `one target per item`：每題的 (a, b) 各自決定接受或拒絕。
+  - `exact likelihood (no omega)`：MALA 直接用 logistic 概似，不用 ω。
+  - `log(aᵢ)`：a 有下界 0。系統在 log 尺度上走。
+  - `Jacobian of the log scale added for a`：換變數時，密度要乘上一個修正倍數（Jacobian），這裡是 a。不加的話，抽到的分配會偏。系統自動加上。
+  - `step sizes adapt during burn-in`：步長在 burn-in 期間自動調整。
+- 第 2 步 `ωⱼᵢ | · ∼ PG(1, aᵢ(θⱼ − bᵢ))`：這一步是系統自己加的，理由寫 `redrawn because MALA moved a, b`。為什麼要加：
+  - Gibbs 步驟抽 a、b 時，把 ω 當成已知的條件。抽完之後，(a, b, ω) 整組仍然服從後驗，舊的 ω 可以繼續用。
+  - MALA 不用 ω。它動過 a、b 之後，舊的 ω 和新的 a、b 不再相配。
+  - 所以下一個用 ω 的步驟之前，要先重抽 ω。
+  - 自己手寫每一步時，這是最常犯的錯。宣告的寫法由系統處理，不會犯。
+  - 下一行 `κⱼᵢ = Yⱼᵢ − ½`：下面 m 的式子會用到。
+- 接下來是 θ、a、b 的 Gibbs 步驟。以 a 為例：
+  - `aᵢ | · ∼ N⁺(mᵢ/pᵢ, 1/pᵢ)`：從常態抽，平均 m/p、變異數 1/p；⁺ 表示截斷在 0 以上。
+  - `from 2 part(s) of the model`：normal part 由模型的 2 個部分加起來：先驗和作答。
+  - `pᵢ = 1 + Σⱼ ωⱼᵢ (θⱼ − bᵢ)²`、`mᵢ = 1 + Σⱼ (θⱼ − bᵢ) κⱼᵢ`：和 ECM 的式子同一型，只是用抽到的 ω（不是期望值 ω̄），θ 也是抽到的值，不用對積分點平均。
+  - θ 的 `mⱼ = Σᵢ aᵢ(κⱼᵢ + ωⱼᵢ aᵢ·bᵢ)`：括號裡的 +ωaᵢbᵢ 來自 η 裡和 θ 無關的部分 −aᵢbᵢ。
+
+```{r mala-run}
+fit_gm <- gibbs(m2pl, steps_mala, n_iter = 2000)
+ess <- data.frame(parameter = summary(fit_g)$parameter, gibbs = summary(fit_g)$ess, with_mala = summary(fit_gm)$ess)
+ess[c(1, 10, 11, 20), ]
+round(c(gibbs = fit_g$time, with_mala = fit_gm$time), 1)
+```
+
+**逐行說明**
+
+1. 用這組步驟跑 2000 次。
+2. 把兩個版本的 ESS 並排：`gibbs` 是第 3 節的 `fit_g`，`with_mala` 是加了 MALA 的版本。
+3. 只看第 1、10、11、20 列：a[1]、a[10]、b[1]、b[10]，也就是最容易和最難的題目。
+4. 兩個版本各花幾秒。
+
+**輸出怎麼讀**
+
+- 表最左邊的數字是列號。
+- ESS：四個極端題的參數 ESS 都變大。例如 a[10] 從 `r summary(fit_g)$ess[10]` 變成 `r summary(fit_gm)$ess[10]`。
+- 時間：每次疊代比較慢，從約 `r round(fit_g$time, 1)` 秒變成約 `r round(fit_gm$time, 1)` 秒。
+- 值不值得，要看「每秒多少 ESS」：
+  - a[10]：從約 `r round(summary(fit_g)$ess[10] / fit_g$time, 1)` 變成約 `r round(summary(fit_gm)$ess[10] / fit_gm$time, 1)`，划算。
+  - a[1]：從約 `r round(summary(fit_g)$ess[1] / fit_g$time, 1)` 變成約 `r round(summary(fit_gm)$ess[1] / fit_gm$time, 1)`，ESS 雖然變大，每秒的 ESS 反而變少。
+- ESS 仍然不到 100，還是要跑久一點。
+
+### 只靠先驗決定的方向：`step_shift()`
+
+**問題：**
+
+- 在 2PL 裡，把所有 θ_j 加 c、所有 b_i 也加 c，a_i(θ_j − b_i) 不變。
+- 所以資料分不出這個方向，只有先驗分得出。這叫「只靠先驗決定的方向」。
+- Gibbs 一次只動一塊，沿這個方向走得很慢。
+
+**平移步驟**（Liu & Sabatti, 2000）：
+
+- `step_shift(theta = 1, b = 1)` 把所有 θ 和所有 b 一起移動同一個 c。
+- c 可以看成一個新參數。資料不影響它，只有先驗會影響它。
+- 所以 c 的條件分配可以直接算出來，從中抽一個值。
+
+```{r shift}
+fit_gs <- gibbs(m2pl, list(step_mala(a, b), step_gibbs(theta, a, b), step_shift(theta = 1, b = 1)), n_iter = 2000)
+c(without_shift = min(summary(fit_gm)$ess), with_shift = min(summary(fit_gs)$ess))
+```
+
+**逐行說明**
+
+1. 在上一組步驟後面加一個平移步驟。`=` 右邊是「移動幾倍的 c」：θ 和 b 都移動 1 倍。
+2. 比較兩個版本裡，所有參數中最小的 ESS（`min()`）。
+
+**輸出怎麼讀**
+
+- 最小的 ESS 從 `r min(summary(fit_gm)$ess)` 變成 `r min(summary(fit_gs)$ess)`。
+- 平移通常讓最慢的參數快一些。這份資料效果不大，因為先驗 N(0, 1) 已經把 θ 的平均固定得很好。
+- ECM 和 CAVI 會略過平移步驟：θ 被積掉了，這個方向本來就不存在。
+
+## 6. 作答加上作答時間
+
+### 模型
+
+j 是人，i 是題：
+
+- 作答：logit P(y_ji = 1) = a_i(θ_j − b_i)；
+- 時間：log t_ji = λ_i − ζ_j − ρ_i θ_j + e_ji，e_ji ~ N(0, σ²_i)；
+- θ_j ~ N(0, 1)、ζ_j ~ N(0, v)。
+
+每個符號：
+
+- t_ji：第 j 人在第 i 題花的時間；log t_ji 是它的對數。
+- λ_i：第 i 題的時間強度。λ_i 愈大，這題平均花的時間愈長。
+- ζ_j：第 j 人的速度。ζ_j 愈大，花的時間愈短。v 是速度的變異數。
+- ρ_i：第 i 題的「交叉關係」。能力愈高，這題花的時間愈短（ρ_i > 0）或愈長（ρ_i < 0）。
+- e_ji：殘差，變異數 σ²_i。
+
+這是現成的 `rtirt_cross()` 模型（入門教學）。
+
+```{r rt-data}
+set.seed(3)
+cond_c <- set_cond(n_subj = 600, n_item = 10)
+sim_c <- sim_data(cond_c, sim_para(cond_c, "cross"), "cross")
+mrt <- block_model(Y = unname(sim_c$Y), logT = unname(sim_c$log_t),
+  theta[person] ~ normal(0, 1),
+  zeta[person] ~ normal(0, sqrt(v)),
+  v ~ half_t(3, 1),
+  a[item] ~ normal(1, 1, lower = 0),
+  b[item] ~ normal(0, 3),
+  lambda[item] ~ normal(0, 10),
+  rho[item] ~ normal(0, 1),
+  sigma2[item] ~ half_t(3, 1),
+  Y ~ bernoulli_logit(a * (theta - b)),
+  logT ~ normal(lambda - zeta - rho * theta, sqrt(sigma2)))
+```
+
+**逐行說明**
+
+- `set.seed(3)`：固定亂數。
+- `set_cond()`：設定模擬的大小，600 人、10 題。
+- `sim_para(cond_c, "cross")`：產生一組交叉關係模型的真值。`sim_data()` 用這組真值模擬資料。
+  - `sim_c$Y` 是作答，`sim_c$log_t` 是 log 時間，都是人 × 題。
+- `block_model()`：
+  - `Y =`、`logT =`：兩個人 × 題的資料矩陣。`unname()` 拿掉欄名，只是為了印出來簡短。
+  - `zeta[person] ~ normal(0, sqrt(v))`：速度 ζ 一人一個，平均 0、變異數 v。`normal()` 的第二個數是 SD，所以寫 `sqrt(v)`。
+  - `v ~ half_t(3, 1)`：v 是變異數。`half_t(3, 1)` 的意思是它的 **SD** √v 服從 half-t(3, 1)。
+  - `a`、`b`：和第 2 節相同。
+  - `lambda[item] ~ normal(0, 10)`：λ 的先驗很寬，因為 log 時間的平均可能離 0 很遠。
+  - `rho[item] ~ normal(0, 1)`：ρ 的先驗。
+  - `sigma2[item] ~ half_t(3, 1)`：每題一個殘差變異數。
+  - 最後兩行：作答的式子（同第 2 節）；log 時間的平均是 λ_i − ζ_j − ρ_i θ_j，SD 是 √σ²_i。
+
+**輸出怎麼讀**
+
+- 這一段沒有輸出，只建立資料和模型 `mrt`。
+
+```{r rt-steps}
+init_rt <- list(theta = as.numeric(scale(rowMeans(sim_c$Y))),
+                zeta = -as.numeric(scale(rowMeans(sim_c$log_t))),
+                lambda = colMeans(sim_c$log_t))
+steps_rt <- list(step_gibbs(rho, v, a, b, theta, lambda, sigma2, zeta),
+                 step_shift(lambda = 1, zeta = 1),
+                 step_shift(rho = -1, zeta = theta))
+```
+
+**逐行說明**
+
+- `init_rt`：起始值，從資料算。
+  - θ：每人的答對比例（`rowMeans()`），標準化（`scale()`）。
+  - ζ：每人 log 時間的平均，標準化後加負號（愈快，ζ 愈大）。
+  - λ：每題 log 時間的平均（`colMeans()`）。
+  - `as.numeric()`：`scale()` 回傳矩陣，這裡換回向量。
+  - 沒給的參數，從先驗平均附近開始。
+- `steps_rt`：
+  - `step_gibbs(...)`：依序處理 8 種參數。
+  - `step_shift(lambda = 1, zeta = 1)`：λ 和 ζ 一起加 c。λ − ζ 不變，所以只有先驗決定 c。
+  - `step_shift(rho = -1, zeta = theta)`：`=` 右邊也可以寫參數名字。ρ 移動 −1 倍的 c；第 j 人的 ζ 移動 θ_j 倍的 c。
+  - 驗算：ρ_i → ρ_i − c、ζ_j → ζ_j + θ_j c。代進去，−ζ_j − ρ_i θ_j 不變。
+  - 兩個平移只對 Gibbs 有用；ECM 和 CAVI 會略過。
+
+**輸出怎麼讀**
+
+- 這一段沒有輸出，只建立起始值和步驟清單。
+
+### ECM：和現成模型比
+
+```{r rt-ecm}
+em_c <- ecm(rtirt_cross(sim_c))
+e_rt <- ecm(mrt, steps_rt, prior = "ml", init = init_rt)
+c(builtin = as.numeric(logLik(em_c)), declared = e_rt$loglik)
+rho_tab <- estimates(em_c)
+round(cbind(builtin = rho_tab$est[grep("^rho", rho_tab$parameter)],
+            declared = e_rt$estimates$est[grep("^rho", e_rt$estimates$parameter)]), 3)
+```
+
+**逐行說明**
+
+1. 現成的 ECM：`ecm(rtirt_cross(sim_c))`。它預設是最大概似估計。
+2. 宣告的 ECM。`prior = "ml"`：最大概似，才能和現成的 `ecm()` 比。`init = init_rt`：用上面的起始值。
+3. 兩者的 log-likelihood。`logLik()` 取出現成模型的值；`as.numeric()` 拿掉附加的資訊，只留數字。
+4. `estimates(em_c)`：現成模型的估計值表（入門教學）。
+5. 兩者的 ρ 並排：`grep("^rho", ...)` 挑出名字以 rho 開頭的列。
+
+**輸出怎麼讀**
+
+- 第一段：兩個 log-likelihood 都是 −10134.85。兩種寫法到達同一個最大值。
+  - 現成的用 41 個共用積分點，宣告的用 21 個自適應積分點，結果仍然一致。
+- 第二段：每一列是一題（`[1,]` 到 `[10,]` 是第 1 到第 10 題）。ρ 的兩欄相同（到小數第 3 位）。
+- 起始值：這份資料，宣告的 ECM 不給 `init` 也到同一個最大值（我們另外試過）。起始值主要是 Gibbs 需要（見下面）。
+
+```{r rt-ecm-algorithm}
+algorithm(e_rt)
+```
+
+**逐行說明**
+
+1. 列出宣告的 ECM 每一輪做什麼。
+
+**輸出怎麼讀**
+
+- `Model p` 多了時間的部分 `logTⱼᵢ ∼ N(λᵢ − ζⱼ − ρᵢ·θⱼ, σᵢ²)`。
+- `Objective`：積掉 θ 和 ζ 兩個變數（`dθⱼ dζⱼ`）。`prior = "ml"`，所以沒有 `+ log p(φ)`。
+- `E-step`：
+  - `θⱼ = mⱼ + sⱼ·zₖ`：只對 θ 做數值積分（21 個點），不是對 (θ, ζ) 做（21 × 21 個點）。
+  - `ζⱼ | θⱼ, yⱼ ∼ N(hⱼ/pⱼ, 1/pⱼ)`：ζ 用公式積掉（`integrated exactly`）。為什麼可以：
+    - 給定 θ，log 時間對 ζ 是常態，而且是線性的。
+    - 所以 ζ 的條件分配還是常態，積分有公式（Bishop, 2006, 2.3 節；速度的條件分配見 van der Linden, 2007, 式 42）。
+    - h 是線性項，p 是精確度，和前面的 m、p 同一個角色。
+    - `p and h are sums over items per person`：這個模型的 p 和 θ 無關，h 是 θ 的一次式。所以每人只要對題目加總一次，再把 21 個 θ 點直接代進去。
+  - `E[g(θⱼ, ζⱼ)]`：M 步裡，時間部分要對 (θ, ζ) 取期望值。
+    - 時間部分對 (θ, ζ) 是二次式。二次式的期望值，只由平均數和共變數決定。
+    - 所以每人只要用 4 個點，權重各 1/4（Julier & Uhlmann, 2004）。
+    - 4 個點是：平均數 ± √2 × 共變數矩陣的「平方根」（Cholesky 分解）的每一行。
+    - 結果和把 21 個 θ 點逐一展開完全相同。
+  - `ω̄ⱼᵢ`、`κⱼᵢ`：和 2PL 相同。
+- `M-step`：依步驟清單的順序，ρ、v、a、b、λ、σ² 各移到條件眾數。
+  - θ、ζ 已積掉，所以略過；兩個平移也略過。
+  - `pᵢ = Σⱼ E[θⱼ²]/σᵢ²`：只有資料的部分，沒有先驗那一項，因為 `prior = "ml"`。
+  - `mᵢ = −Σⱼ E[θⱼ(logTⱼᵢ − (λᵢ − ζⱼ))]/σᵢ²`：ρ 的線性項。括號裡是「時間減掉和 ρ 無關的平均數部分」。
+  - `v ← (Σⱼ E[ζⱼ²])/n`、`σᵢ² ← (Σⱼ E[(...)²])/nᵢ`：沒有先驗時，變異數的條件眾數就是平均的殘差平方（期望值）。n 是加總裡的項數。
+- `Then`：和 2PL 相同。
+- 什麼時候不能用公式積掉：
+  - ζ 的係數或時間的變異數含 θ，例如 θ × ζ 的交互作用；
+  - 或速度不是常態。
+  - 這時 `ecm()` 自動改回逐點展開。結果一樣，只是比較慢。
+- 每一步的理論依據與出處：`?ecm.block_model` 的 "Theory of each step"。
+
+### Gibbs 和 CAVI
+
+```{r rt-gibbs-vi}
+fit_c <- gibbs(rtirt_cross(sim_c), n_iter = 2000, n_chain = 2, seed = 1, verbose = FALSE, fit_indices = FALSE)
+g_rt <- gibbs(mrt, steps_rt, n_iter = 2000, init = init_rt)
+v_rt <- vi(mrt, steps_rt, init = init_rt)
+pick <- function(tab, col) tab[[col]][grep("^rho", tab$parameter)]
+round(cbind(declared_ecm = pick(e_rt$estimates, "est"),
+            builtin_gibbs = fit_c$post$mean$rho, declared_gibbs = pick(summary(g_rt), "mean"),
+            declared_cavi = pick(v_rt$summary, "mean")), 3)
+round(c(declared_gibbs = g_rt$time, declared_cavi = v_rt$time), 1)
+```
+
+**逐行說明**
+
+1. 現成的 Gibbs：`gibbs(rtirt_cross(sim_c))`。
+   - 2 條鏈、每條 2000 次；`seed = 1` 固定亂數。
+   - `verbose = FALSE` 不印進度；`fit_indices = FALSE` 不算適配指標，省時間。
+2. 宣告的 Gibbs，用資料算的起始值。
+3. 宣告的 CAVI，同樣的起始值。
+4. `pick()`：一個小函數。從表 `tab` 挑出名字以 rho 開頭的列，取出 `col` 那一欄。
+5. 把四種結果的 ρ 並排，ECM 在最前面。
+   - `fit_c$post$mean$rho`：現成 Gibbs 存的 ρ 的後驗平均數。
+6. 宣告的 Gibbs 和 CAVI 各花幾秒。
+
+**輸出怎麼讀**
+
+- 每一列是一題（`item01` 到 `item10`，名字來自現成模型的欄）。
+- 現成與宣告的 Gibbs 只差抽樣誤差。
+- ECM 是最大概似估計，Gibbs 是後驗平均數。這份資料 600 人，先驗的影響小，四欄最多差 0.004。
+- CAVI 的平均數也接近。
+- 時間：宣告的 Gibbs 約 `r round(g_rt$time)` 秒，CAVI 約 `r round(v_rt$time)` 秒。
+
+**為什麼 Gibbs 要給起始值：**
+
+- 這個模型有兩個眾數。
+- 另一個眾數裡，θ 變成「速度」：ρ 約為 1、a 接近 0、v 接近 0。
+- 從先驗平均附近開始時，鏈可能停在那裡。這時 R̂ 會很大，`print()` 會警告。
+- 用資料算的起始值就不會。
+- 現成的 `gibbs()` 也可以從 ECM 的估計值開始（`init = "ecm"`，入門教學）。
+
+### cut：時間不回頭影響能力
+
+cut（Plummer, 2015）的意思：
+
+- θ 只由作答決定；
+- 時間的參數會用到 θ；
+- 但時間不回頭改變 θ。
+
+JAGS 和 Stan 都沒有原生的 cut。cut 是一種抽樣的做法，所以只有 `gibbs()` 能用。宣告的寫法，只要在抽 θ 的步驟加 `cut = "logT"`：
+
+```{r rt-cut}
+steps_cut <- list(step_gibbs(a, b), step_gibbs(theta, cut = "logT"),
+                  step_gibbs(rho, lambda, sigma2, zeta, v),
+                  step_shift(lambda = 1, zeta = 1), step_shift(rho = -1, zeta = theta))
+g_cut <- gibbs(mrt, steps_cut, n_iter = 2000, init = init_rt)
+round(cbind(full = pick(summary(g_rt), "mean"), cut = pick(summary(g_cut), "mean")), 3)
+c(full = mean(g_rt$mean$theta$sd), cut = mean(g_cut$mean$theta$sd))
+```
+
+**逐行說明**
+
+1. 步驟：
+   - 先 a、b；
+   - 再 θ，但不用 logT 那一部分（`cut = "logT"`）；
+   - 再時間的參數；
+   - 最後兩個平移。
+2. 用這組步驟跑。
+3. ρ 的後驗平均數：完整後驗（`full`，上面的 `g_rt`）與 cut 並排。
+4. 每人 θ 後驗 SD 的平均。`g_rt$mean$theta$sd` 是每個人的 θ 後驗 SD（一人一個值）。
+
+**輸出怎麼讀**
+
+- 第一段：`[1,]` 到 `[10,]` 是第 1 到第 10 題。
+- **cut 的 ρ 往 0 縮：**
+  - ρ 明顯不是 0 的題目，cut 之後都往 0 靠，大約剩一半到四分之三。例如第 4 題：−0.401 → −0.270；第 1 題：0.208 → 0.100。
+  - ρ 接近 0 的題目（第 2、3、7 題），只是在 0 附近變動。
+  - 原因：θ 比較不準。以 θ 當自變項的迴歸係數會被稀釋，就像測量誤差讓相關變小。
+- 第二段：**cut 的 θ 後驗 SD 比較大**（0.50 → 0.60）。時間不再幫忙估 θ。
+- **什麼時候用 cut：** 希望報告的能力分數只由作答決定，或懷疑時間的模型設定有誤。
+- cut 抽到的是兩段式的分配：先只用作答決定 θ，再把 θ 帶進時間模型。
+  - 它不是任何一個模型的後驗，所以 Geweke 檢查不能用。
+  - `ecm()` 和 `vi()` 也不接受 cut，錯誤訊息是 "a cut ... is a sampling scheme; use gibbs()"。
+
+## 7. 題目共變項：LLTM 加殘差
+
+LLTM（linear logistic test model，線性 logistic 測驗模型）用題目特徵解釋難度。這裡是 1PL 加上殘差（Janssen, Schepers & Peres, 2004）：
+
+b_i ~ N(d0 + d1 w1_i + d2 w2_i, vb)
+
+- w1_i、w2_i：第 i 題的兩個特徵（0 或 1），例如「有沒有圖」。
+- d0：兩個特徵都是 0 時的平均難度。
+- d1、d2：特徵的效果，例如 w1_i = 1 的題目平均難 d1。
+- vb：殘差變異數，也就是特徵解釋不了的難度差異。第二個數是變異數（和印出來的寫法一樣）。
+
+```{r lltm-data}
+set.seed(21); N3 <- 800; K3 <- 20
+w1 <- rbinom(K3, 1, 0.5); w2 <- rbinom(K3, 1, 0.5)
+b3 <- -0.3 + 0.8 * w1 + 0.5 * w2 + rnorm(K3, 0, 0.3)
+Y3 <- matrix(rbinom(N3 * K3, 1, plogis(outer(rnorm(N3, 0, sqrt(1.5)), b3, "-"))), N3)
+m_lltm <- block_model(Y = Y3, w1 = w1, w2 = w2,
+  theta[person] ~ normal(0, sqrt(v)), v ~ half_t(3, 1),
+  d0 ~ normal(0, 3), d1 ~ normal(0, 3), d2 ~ normal(0, 3), vb ~ half_t(3, 1),
+  b[item] ~ normal(d0 + d1 * w1 + d2 * w2, sqrt(vb)),
+  Y ~ bernoulli_logit(theta - b))
+```
+
+**逐行說明**
+
+1. 固定亂數；800 人、20 題。
+2. 兩個 0/1 的題目特徵 w1、w2，每題一個值，各有一半機率是 1。
+3. 真的難度：−0.3 + 0.8 w1 + 0.5 w2，加上 SD 0.3 的殘差。所以真值是 d0 = −0.3、d1 = 0.8、d2 = 0.5、vb = 0.3² = 0.09。
+4. 模擬作答。1PL：logit = θ − b。
+   - `rnorm(N3, 0, sqrt(1.5))`：θ 的變異數是 1.5（真值 v = 1.5）。
+   - `outer(θ, b, "-")`：得到每個人、每題的 θ_j − b_i。
+5. 宣告：
+   - `w1 = w1, w2 = w2`：長度 K 的向量，系統知道是一題一個值。
+   - `theta[person] ~ normal(0, sqrt(v))`、`v ~ half_t(3, 1)`：θ 的變異數 v 要自由估，因為 1PL 沒有鑑別度。
+   - `d0`、`d1`、`d2 ~ normal(0, 3)`：三個係數的先驗。
+   - `vb ~ half_t(3, 1)`：殘差變異數的先驗。
+   - `b[item] ~ normal(d0 + d1 * w1 + d2 * w2, sqrt(vb))`：難度的平均由題目特徵決定，殘差 SD 是 √vb。
+   - `Y ~ bernoulli_logit(theta - b)`：1PL。
+
+**輸出怎麼讀**
+
+- 這一段沒有輸出，只建立資料和模型 `m_lltm`。
+
+```{r lltm-ecm}
+e_l <- ecm(m_lltm)
+e_l$estimates[1:5, ]
+```
+
+**逐行說明**
+
+1. ECM，不寫步驟。系統依宣告的順序，替每個參數選條件眾數（θ 照樣積掉）。
+2. 估計值表的前 5 列：v、d0、d1、d2、vb。之後是 20 個 b。
+
+**輸出怎麼讀**
+
+- `est` 是估計值（後驗眾數），`se` 是標準誤。這裡印到小數 7 位，下面取 2 位來讀。
+- d1 = 0.75，接近真值 0.8。
+- d2 = 0.21，標準誤約 0.13。它離真值 0.5 約 2.3 個標準誤。原因：只有 20 題，每個特徵只靠約 10 題來估。
+- d0 = −0.11，真值 −0.3，差約 1.4 個標準誤。
+- v = 1.44，接近真值 1.5。
+- vb = 0.054，比真值 0.09 小。原因有兩個：
+  - ECM 只積掉 θ。20 個 b 不積掉，而是和 vb 一起取眾數（聯合眾數）。b 被拉向題目特徵的迴歸線，殘差變小，vb 也跟著變小（O'Hagan, 1976）。
+  - 20 題要估 3 個係數（d0、d1、d2）。和 ML 一樣，估計變異數時沒有扣掉這 3 個自由度，所以偏小，約 (20 − 3)/20 倍（Harville, 1977）。
+  - 用同樣的設計模擬 40 份資料：ECM 的 vb 平均 0.065；Gibbs 後驗的眾數平均 0.086、平均數平均 0.110（真值 0.09）。所以差距主要不是「眾數比平均數小」，而是聯合眾數。
+  - 下面的 Gibbs 給後驗平均數，可以對照。
+
+```{r lltm-gibbs}
+g_l <- gibbs(m_lltm, list(step_gibbs(theta, b, d0, d1, d2, vb, v), step_shift(theta = 1, b = 1, d0 = 1)), n_iter = 2000)
+s_l <- summary(g_l)
+s_l[s_l$parameter %in% c("d0", "d1", "d2", "vb", "v"), ]
+```
+
+**逐行說明**
+
+1. Gibbs 的步驟：
+   - 依序抽 θ、b、三個 d、vb、v。
+   - 平移：θ、b、d0 一起加 c。θ − b 不變；b 的平均 d0 + d1 w1 + d2 w2 也一起移動，所以 b 的先驗也不變。只剩 θ 的先驗決定 c。
+2. 摘要表。
+3. 挑出 d0、d1、d2、vb、v 那幾列（`%in%`：名字在這個清單裡）。
+
+**輸出怎麼讀**
+
+- 欄和第 3 節的 Gibbs 表相同。這次所有 `rhat` 都小於 1.05，`ess` 都在 150 以上：鏈混合得不錯。
+- d 和 v 的後驗平均數，和 ECM 的估計值接近（差不到 0.03）。
+- 95% 區間（`q2.5` 到 `q97.5`）都包含真值。
+- vb 的後驗平均數 0.098，比 ECM 的聯合眾數 0.054 大，更接近真值 0.09。Gibbs 把 b 也一起抽，等於把 b 積掉，所以沒有聯合眾數的問題。
+- 三個 d 的區間都很寬：題目特徵的效果，要更多題目才估得準。
+
+## 8. 沒有常態形式的參數
+
+有時參數不是以線性的方式出現在 logit 或平均數裡。例如鑑別度寫成 exp(la)，la 是 log 鑑別度。
+
+- 這時 la 的完整條件分配不是常態。
+- 所以也沒有公式的眾數 m/p。
+
+### ECM：沿梯度往上走
+
+```{r nonlinear}
+m_log <- block_model(Y = Y,
+  theta[person] ~ normal(0, 1), la[item] ~ normal(0, 0.5), b[item] ~ normal(0, 3),
+  Y ~ bernoulli_logit(exp(la) * (theta - b)))
+tryCatch(ecm(m_log, list(step_gibbs(theta, la, b))), error = function(e) conditionMessage(e))
+e_log <- ecm(m_log, list(step_mala(la), step_gibbs(b)))
+head(e_log$estimates, 3)
+```
+
+**逐行說明**
+
+1. 前 3 行宣告：log 鑑別度 la ~ N(0, 0.5²)，logit 是 exp(la)(θ − b)。資料是第 2 節的 `Y`。
+2. 想用 `step_gibbs()` 處理 la：系統拒絕。`tryCatch()` 接住錯誤，把錯誤訊息印出來，不讓程式停下。
+3. 改用 `step_mala(la)`；b 仍用條件眾數。
+   - 這裡沒寫 θ：ECM 會積掉 θ，步驟裡寫不寫都一樣。
+4. `head(..., 3)`：看前三列。
+
+**輸出怎麼讀**
+
+- 第一段是錯誤訊息：模型對 la 不是線性的（`is not linear in la`），沒有公式的條件眾數，要用 `step_mala(la)`。
+- 表：la 是 log 鑑別度。
+  - la[1] = −0.56，exp(−0.56) ≈ 0.57。
+  - 第 3 節 ECM 的 a[1] = 0.50，兩者接近。
+  - 兩個模型的先驗不同，所以不會完全相同。
+
+```{r nonlinear-algorithm}
+algorithm(e_log)
+```
+
+**逐行說明**
+
+1. 列出這個 ECM 每一輪做什麼。
+
+**輸出怎麼讀**
+
+- `Objective`、`E-step`：和第 3 節相同，只是 `eta = exp(la) * (theta - b)`。
+- `laᵢ ← gradient ascent on Q(laᵢ)`：la 沿梯度往上走幾步。
+  - 走過頭（目標值變小），就把步長減半（`step halving`）。
+  - 這叫廣義 EM（generalized EM）：M 步不必找到最高點，只要讓 Q 變大。目標值仍然不下降。
+  - `the step_mala() counterpart`：這是 `step_mala()` 在 ECM 裡的對應做法。
+- `bᵢ ← mᵢ/pᵢ`：b 仍是條件眾數。p 和 m 的式子裡，鑑別度換成 `exp(laᵢ)`。
+
+### `mml()`：直接最大化
+
+ECM 一塊一塊爬。`mml()` 不用步驟，直接最大化 ECM 的同一個目標。
+
+它用 Newton 法：用梯度和二次微分（Hessian）決定下一步往哪裡走、走多遠。
+
+```{r nonlinear-mml}
+t_ecm <- system.time(ecm(m_log, list(step_mala(la), step_gibbs(b))))[["elapsed"]]
+t_mml <- system.time(n_log <- mml(m_log))[["elapsed"]]
+round(c(ecm_seconds = t_ecm, mml_seconds = t_mml), 1)
+n_log$loglik - e_log$loglik
+round(cbind(ecm_est = e_log$estimates$est, mml_est = n_log$estimates$est,
+            ecm_se = e_log$estimates$se, mml_se = n_log$estimates$se)[1:3, ], 3)
+```
+
+**逐行說明**
+
+1. 再跑一次上面的 ECM，計時。
+2. `mml()`，同時計時。預設 `method = "newton"`：
+   - 用 R 的最佳化函數 `nlminb()` 一次調整所有參數。參數的範圍（例如下界）由它處理。
+   - 梯度由 Fisher identity（第 4 節）算，二次微分由 Louis 公式（第 3 節）算。這就是 Glas 與 van der Linden（2010）的 Newton–Raphson。
+   - 只需要式子能微分，不需要每個參數都有公式的步驟。
+3. 兩種方法的秒數。
+4. 兩種方法的目標值相減。
+5. 前 3 個參數（la[1]–la[3]）的估計值與標準誤並排。
+
+**輸出怎麼讀**
+
+- 第一段：這個例子 `mml()` 快很多（約 `r round(t_mml, 1)` 秒，ECM 約 `r round(t_ecm, 1)` 秒）。ECM 的 la 沒有公式的眾數，只能慢慢爬。
+- 第二段：目標值的差是 `r format(signif(n_log$loglik - e_log$loglik, 3))`。`e-08` 是 × 10⁻⁸，幾乎是 0：兩種方法到達同一個最大值。
+- 第三段：估計值和標準誤也相同（到小數第 3 位）。
+- 每一塊都有公式的眾數時，反而是 ECM 比較快。我們另外試過第 6 節的作答加時間模型，1000 人 × 20 題：
+  - 宣告的 ECM 約 10 秒；加 `quadrature = "ba81"` 約 3 秒；
+  - `mml()` 約 20 秒。
+  - 原因：Newton 法每一步都要重算整個 Hessian，參數多時很花時間。
+  - 起始值也有影響：用預設的起始值，ECM 的疊代次數約多一倍。
+- 所以 `mml()` 適合有參數沒有公式眾數的模型（像這一節）。
+- ECM 的其他好處：
+  - 每一步都有公式，保證目標值不下降；
+  - `algorithm()` 寫得出每一步；
+  - 同一份步驟可以換成 Gibbs 或 CAVI。
+  - 兩者到同一個最大值，可以互相驗證。
+- `mml(method = "quasi-newton")`：最大化時不用 Louis 的 Hessian，只用梯度（quasi-Newton 法）。
+
+```{r nonlinear-mml-algorithm}
+algorithm(n_log)
+```
+
+**逐行說明**
+
+1. 列出 `mml()` 做了什麼。
+
+**輸出怎麼讀**
+
+- `Objective`、`E-step` 和 ECM 相同：θ 用 21 個自適應積分點積掉。
+- 沒有 `ω̄` 那一行：`mml()` 直接算目標值，不需要 Pólya–Gamma 的替代函數。
+- `Maximization`：`φ ← argmax ℓ(φ)`，所有參數一起用 `nlminb()` 調整，在範圍之內（`within the bounds`）。
+  - 梯度用 Fisher identity，也就是「看得到 θ 時的分數函數」的期望值（`the expected complete-data score`）。
+  - Hessian 用 Louis 公式（`Newton`）。括號裡是出處。
+- `standard errors`：標準誤也由 Louis 公式的 Hessian 算出。
+
+### Gibbs 和 CAVI
+
+```{r nonlinear-gibbs}
+fit_log <- gibbs(m_log, list(step_mala(la), step_gibbs(theta, b)), n_iter = 1000)
+head(summary(fit_log), 3)
+tryCatch(vi(m_log, list(step_mala(la), step_gibbs(theta, b))), error = function(e) conditionMessage(e))
+```
+
+**逐行說明**
+
+1. Gibbs：la 用 MALA，θ 和 b 照 Gibbs。每條鏈 1000 次。
+2. 看摘要表的前三列。
+3. CAVI：系統拒絕，`tryCatch()` 印出錯誤訊息。
+
+**輸出怎麼讀**
+
+- 表：la 的後驗平均數和 ECM 接近（la[1]：−0.62 對 −0.56）。Gibbs 給平均數，ECM 給眾數，所以不完全相同。
+- 三列的 R̂ 都超過 1.05，前兩列的 ESS 不到 100。1000 次太短，實際用時請跑久一點。
+- 錯誤訊息：`step_mala(la)` 沒有 CAVI 的更新（`no CAVI update`）。
+  - 括號說 la 的完整條件分配不是共軛的（`not conjugate`）。共軛的意思是：條件分配和先驗同一型，例如都是常態。
+  - CAVI 每一塊都需要這樣的公式。
+  - 這時用 `ecm()`、`mml()` 或 `gibbs()`。
+
+## 9. 手寫每一步（進階）
+
+宣告的寫法在背後呼叫的，是一個個寫好的積木（計算在 C++ 裡）。你也可以不宣告，直接寫一個 `step(s, d)` 函數：
+
+- `s` 是目前所有參數的值（state），是一個 list。
+- `d` 是資料，也是一個 list。
+- 函數做完一輪，回傳新的 `s`。
+
+這個函數可以交給：
+
+- `run_em()`：跑手寫的 EM；
+- `run_sampler()`：跑手寫的 Gibbs。
+
+### 手寫 EM：`run_em()`
+
+```{r hand-em}
+step_em <- function(s, d) {
+  e <- estep_irt(d$Y, s$a, s$b)
+  s[c("a", "b")] <- mstep_items(e, s$a, s$b)
+  s$.loglik <- e$loglik
+  s
+}
+init_em <- function(d) list(a = rep(1, ncol(d$Y)), b = rep(0, ncol(d$Y)))
+loglik_em <- function(s, d) estep_irt(d$Y, s$a, s$b)$loglik
+fit_he <- run_em(list(Y = Y), init_em, step_em, loglik = loglik_em, positive = "a")
+e_ml <- ecm(m2pl, steps, prior = "ml")
+c(hand = fit_he$loglik, declared = e_ml$loglik)
+round(cbind(declared = e_ml$estimates$est, hand = fit_he$estimates$est)[1:4, ], 3)
+```
+
+**逐行說明**
+
+- `step_em`：一輪 EM（Bock & Aitkin, 1981 的做法，也就是 ba81）。
+  - `estep_irt()`：E 步。在共用的積分點上，算每個點、每題的期望人數與期望答對人數，也算 log-likelihood。
+  - `mstep_items()`：M 步。給定 E 步的結果，更新每題的 a、b，回傳 `list(a, b)`。`s[c("a", "b")] <-` 把兩者放回 `s`。
+  - `s$.loglik`：把這一輪的 log-likelihood 交給 `run_em()`，讓它檢查有沒有下降。
+  - 最後一行 `s`：回傳新的狀態。
+- `init_em`：起始值，a 都是 1、b 都是 0。
+- `loglik_em`：在任一組參數上算 log-likelihood。`run_em()` 用它做檢查、算標準誤。
+- `run_em()`：重複 `step_em` 直到收斂。`list(Y = Y)` 是資料 `d`。`positive = "a"`：a 必須大於 0。
+- `e_ml`：宣告的 ECM，`prior = "ml"`（最大概似），才能和手寫的比。
+- 最後兩行：並排兩者的 log-likelihood，和前 4 個參數。
+
+**輸出怎麼讀**
+
+- 第一段：兩個 log-likelihood 都是 −2375.536。
+- 第二段：`[1,]` 到 `[4,]` 是 a[1] 到 a[4]，兩欄相同。手寫的 EM 和宣告的 ECM 到達同一個最大值。
+- 手寫版沒有先驗，所以和第 3 節的 `fit_e`（後驗眾數）不同。例如 a[1] 是 0.449，不是 0.500。
+
+```{r hand-em-check}
+print(check_ecm(data = list(Y = Y), init = init_em, step = step_em, loglik = loglik_em,
+                positive = "a", n_start = 3, seed = 1))
+```
+
+**逐行說明**
+
+1. `check_ecm()` 也能檢查手寫的 EM：給它資料、起始值、步驟和 log-likelihood 函數，不給模型。其他引數和第 4 節相同。
+
+**輸出怎麼讀**
+
+- 第一行：3 組起始值，全部通過。
+- 和第 4 節一樣分兩段印。手寫版沒有 Q，所以只有四列：
+  - 第 1 列：一次疊代不讓 log-likelihood 下降；
+  - 第 2 列：`step()` 回報的 `.loglik`，和 `loglik()` 在同一組參數上算的相同；
+  - 第 3、4 列：停在最大值（一般的最佳化器找不到更好的點；梯度接近 0）。
+
+### 手寫 Gibbs：`run_sampler()`
+
+```{r hand}
+step_2pl <- function(s, d) {
+  s$omega <- draw_omega(s$a, s$b, s$theta)
+  s[c("a", "b")] <- draw_items_pg(d$Y, s$omega, s$theta, s$a)
+  s$theta <- draw(irt_part(d$Y, s$omega, s$a, s$b) + normal_prior(0, 1))
+  s
+}
+init_2pl <- function(d) list(theta = rnorm(nrow(d$Y)), a = rep(1, ncol(d$Y)), b = rep(0, ncol(d$Y)))
+fit_h <- run_sampler(list(Y = Y), init_2pl, step_2pl, monitor = c("a", "b"), keep_mean = "theta", n_iter = 2000)
+round(cbind(declared = summary(fit_g)$mean, hand = summary(fit_h)$mean)[1:4, ], 2)
+```
+
+**逐行說明**
+
+- `step_2pl`：一輪 Gibbs。
+  - `draw_omega()`：抽 ω。參數順序是題目的（a、b）在前、人的（θ）在後。
+  - `draw_items_pg()`：給定 ω 和 θ，先抽每題的 b，再抽 a，回傳 `list(a, b)`。傳入目前的 `s$a`，是因為先抽 b 時要用到 a。
+  - θ：作答的部分 `irt_part()` 是 θ 的 normal part；加上先驗 `normal_prior(0, 1)`，再 `draw()`。
+  - 最後一行回傳 `s`。
+- `init_2pl`：起始值。θ 從 N(0, 1) 隨機抽，a 都是 1、b 都是 0。
+- `run_sampler()`：跑鏈、存結果。
+  - `monitor`：要存每次抽樣值的參數。
+  - `keep_mean`：只存後驗平均數與 SD 的參數。
+  - `n_iter = 2000`：和宣告的版本相同。
+- 最後一行：和宣告寫法（第 3 節的 `fit_g`）的前 4 個參數並排，取 2 位。
+
+**輸出怎麼讀**
+
+- `[1,]` 到 `[4,]` 是 a[1] 到 a[4]。
+- 兩欄只差抽樣誤差（最多差 0.02）。
+
+### 什麼時候要手寫
+
+- 宣告的寫法還沒有的分配或結構，例如 probit、多元常態的參數、題組、混合模型。
+- 要用專門的 C++ 積木。例如 `draw_items_joint()`：極易題的 (a, b) 一起抽，比 `step_mala(a, b)` 更有效。
+
+**手寫時要自己顧的規則：**
+
+- 用了不需要 ω 的步驟（`draw_items_joint()`、`draw_mala()`）之後，下一個用 ω 的步驟之前，要先 `draw_omega()`（理由見第 5 節）。
+- 只靠先驗決定的方向，用 `draw_shift(values, prior, along, lower)` 精確地抽平移量。
+- 檢查：
+  - 手寫的 EM：`check_ecm(data =, init =, step =, loglik =)`（上面）；
+  - 手寫的抽樣器：`check_sampler(step = , prior = , simulate = , monitor = )`。`prior()`（從先驗抽參數）和 `simulate()`（給定參數模擬資料）要自己寫。
+
+**文獻上的模型：** `inst/examples/` 裡有完整程式。開頭的註解說明模型，以及每一步用哪個積木：
+
+| 檔案 | 模型 |
+|---|---|
+| `ex07_blocks.R` | 先用 `ecm(rtirt_cross())` 估計；再把 `gibbs(rtirt_cross())` 用積木手寫，每次疊代都相同 |
+| `ex08_testlet.R` | 題組模型（Bradlow, Wainer & Wang, 1999），手寫 Gibbs |
+| `ex09_mirt_rt.R` | 兩個能力加作答時間（Man, Harring, Jiao & Zhan, 2019），手寫 Gibbs |
+| `ex10_conditional_dependence.R` | 作答與時間的條件相依（Bolsinova, De Boeck & Tijmstra, 2017），手寫 Gibbs |
+| `ex11_lnirt.R` | 重現 LNIRT（Fox & Marianti, 2017），手寫 Gibbs |
+| `ex12_variable_speed.R` | 速度在測驗中改變（Fox & Marianti, 2016），手寫 Gibbs |
+| `ex13_preknowledge.R` | 用 `ecm()` 估題目參數，再用作答時間偵測洩題（Sinharay, 2020） |
+
+## 10. 常見錯誤
+
+| 症狀 | 原因 | 怎麼辦 |
+|---|---|---|
+| `block_model()` 報 "unknown name" | 式子裡的名字不是資料，也沒有宣告 | 宣告它，或把資料用 `名字 = 值` 給進去 |
+| `block_model()` 報 "one value per person ... where one value per item is needed" | 一人一個的參數，放在一題一個的式子裡 | 檢查 `[person]`、`[item]` |
+| `ecm()` 或 `gibbs()` 報 "no step updates ..." | 有參數沒有任何步驟更新它（平移不算） | 加到某個 `step_gibbs()` 或 `step_mala()`；`ecm()` 也可以不寫 `steps` |
+| 報 "not linear in ...; use step_mala" | 參數在 `exp()`、`log()` 裡，或乘上自己 | 用 `step_mala()`，或 `mml()`（第 8 節） |
+| `ecm()` 報 "expected precision ... is not positive" | 最大概似時，某個參數沒有資訊 | 用 `prior = "map"`（預設） |
+| `ecm()` 警告 adaptive gap | `quadrature = "ba81"` 的共用點不夠密 | 用預設的 `quadrature = "adaptive"` |
+| `ecm()` 或 `vi()` 報 "a cut ... is a sampling scheme" | cut 只能抽樣 | 用 `gibbs()` |
+| `vi()` 報 "not multilinear" 或 "no CAVI update" | CAVI 需要共軛的條件分配 | 用 `ecm()` 或 `gibbs()` |
+| `print(fit)` 說 "the chains have not mixed" | 跑太短、極端題、只靠先驗決定的方向 | 跑久一點；`step_mala(a, b)`；`step_shift()`（第 5 節） |
+| Gibbs 兩條鏈的結果差很多（R̂ 很大） | 鏈停在不同的眾數 | 用資料算起始值（`init =`，第 6 節） |
+| CAVI 的 SD 很小 | 平均場的已知性質 | 標準誤用 ECM，區間用 Gibbs |
+
+## 附錄 A：JAGS → 宣告
+
+| JAGS | `block_model()` |
+|---|---|
+| `theta[j] ~ dnorm(0, 1)` | `theta[person] ~ normal(0, 1)` |
+| `a[i] ~ dnorm(1, 1) T(0,)` | `a[item] ~ normal(1, 1, lower = 0)` |
+| `b[i] ~ dnorm(0, 1/9)` | `b[item] ~ normal(0, 3)`（SD，不是精確度） |
+| `logit(p[j,i]) <- a[i]*(theta[j]-b[i]); Y[j,i] ~ dbern(p[j,i])` | `Y ~ bernoulli_logit(a * (theta - b))` |
+| `eta[j,i] <- ...` | `eta <- ...`（之後的式子可以用 `eta`） |
+| `logT[j,i] ~ dnorm(mu[j,i], 1/sigma2[i])` | `logT ~ normal(mu, sqrt(sigma2))` |
+| `sd ~ dt(0, 1, 3) T(0,)`；`sigma2 <- sd^2` | `sigma2[item] ~ half_t(3, 1)` |
+| `b[i] ~ dnorm(inprod(W[i,], delta), 1/vb)` | `b[item] ~ normal(d0 + d1 * w1 + d2 * w2, sqrt(vb))` |
+| （JAGS 沒有）cut | `step_gibbs(theta, cut = "logT")` |
+| （JAGS 沒有）沿只靠先驗決定的方向移動 | `step_shift(theta = 1, b = 1)` |
+
+## 附錄 B：函數一覽
+
+**宣告與估計**
+
+| 函數 | 作用 |
+|---|---|
+| `block_model(資料, 參數 ~ 分配, 名字 <- 式子, ...)` | 宣告模型：`normal()`、`bernoulli_logit()`、`half_t()`、`inv_gamma()`；`[person]`、`[item]` |
+| `step_gibbs(..., cut =)`、`step_mala(...)`、`step_shift(名字 = 倍數, ...)` | 步驟：更新哪些參數、用什麼方法 |
+| `ecm(model, steps, latent, nodes, prior, init, cycles, max_iter, tol, se, analytic, quadrature)` | ECM（主要）：後驗眾數（`prior = "map"`）或最大概似（`"ml"`）與 Louis 標準誤。`quadrature = "ba81"`：大家用同一組積分點。`analytic = TRUE`（預設）：常態、線性的潛在變數（如速度）用公式積掉。其他引數見 `?ecm.block_model` |
+| `gibbs(model, steps, n_iter, n_chain, init)` | Gibbs：同樣的步驟改成抽樣；`step_mala()` 是 MALA |
+| `vi(model, steps, init)` | CAVI：同樣的步驟改成更新 q |
+| `mml(model, prior, method)` | 不用步驟，直接最大化 ECM 的目標：`method = "newton"`（Louis Hessian）或 `"quasi-newton"` |
+| `algorithm(fit)`、`algorithm(model, steps =)`、`equations(model)` | 每一步的式子、模型的式子 |
+| `check_ecm(model, steps)`、`check_sampler(model, steps =)`、`check_vi(model, steps)` | 檢查三種估計法 |
+
+**手寫用的積木（第 9 節）**
+
+| 函數 | 作用 |
+|---|---|
+| `run_em(data, init, step, loglik, positive)`、`estep_irt()`、`mstep_items()` | 跑手寫的 EM |
+| `check_ecm(data =, init =, step =, loglik =)` | 檢查手寫的 EM |
+| `run_sampler(data, init, step, monitor, keep_mean)` | 跑手寫的抽樣器 |
+| `check_sampler(step = , prior = , simulate = , monitor = )` | 檢查手寫的抽樣器 |
+| `normal_part()`、`normal_prior()`、`irt_part()`、`calc_normal_part()`、`reg_part()`、`draw()` | normal part（精確度與線性項） |
+| `draw_omega()`、`draw_pg()`、`draw_items_pg()`、`draw_items_joint()`、`draw_items_mh()`、`draw_probit_z()` | 作答的積木 |
+| `draw_var()`、`draw_sigma2()`、`draw_lambda()`、`draw_mvn()`、`draw_invwishart()`、`draw_cor()` | 變異數、時間、多元常態 |
+| `draw_shift(values, prior, along, lower)`、`draw_mala()`、`mcmc_adapt()` | 平移（從條件分配精確地抽平移量）、MALA |
+
+## 參考文獻
+
+- Abril-Pla, O., et al. (2023). PyMC: A modern, and comprehensive probabilistic programming framework in Python. *PeerJ Computer Science, 9*, e1516.
+- Blei, D. M., Kucukelbir, A., & McAuliffe, J. D. (2017). Variational inference: A review for statisticians. *Journal of the American Statistical Association, 112*(518), 859–877.
+- Bishop, C. M. (2006). *Pattern recognition and machine learning*. Springer.
+- Bock, R. D., & Aitkin, M. (1981). Marginal maximum likelihood estimation of item parameters: Application of an EM algorithm. *Psychometrika, 46*, 443–459.
+- Bolsinova, M., De Boeck, P., & Tijmstra, J. (2017). Modelling conditional dependence between response time and accuracy. *Psychometrika, 82*(4), 1126–1148.
+- Bradlow, E. T., Wainer, H., & Wang, X. (1999). A Bayesian random effects model for testlets. *Psychometrika, 64*(2), 153–168.
+- Dempster, A. P., Laird, N. M., & Rubin, D. B. (1977). Maximum likelihood from incomplete data via the EM algorithm. *Journal of the Royal Statistical Society: Series B, 39*(1), 1–38.
+- Durante, D., & Rigon, T. (2019). Conditionally conjugate mean-field variational Bayes for logistic models. *Statistical Science, 34*(3), 472–485.
+- Fox, J.-P., & Marianti, S. (2016). Joint modeling of ability and differential speed using responses and response times. *Multivariate Behavioral Research, 51*(4), 540–553.
+- Fox, J.-P., & Marianti, S. (2017). Person-fit statistics for joint models for accuracy and speed. *Journal of Educational Measurement, 54*(2), 243–262.
+- Geweke, J. (2004). Getting it right: Joint distribution tests of posterior simulators. *Journal of the American Statistical Association, 99*(467), 799–804.
+- Glas, C. A. W. (1998). Detection of differential item functioning using Lagrange multiplier tests. *Statistica Sinica, 8*(3), 647–667.
+- Glas, C. A. W. (1999). Modification indices for the 2-PL and the nominal response model. *Psychometrika, 64*(3), 273–294.
+- Glas, C. A. W., & van der Linden, W. J. (2010). Marginal likelihood inference for a model for item responses and response times. *British Journal of Mathematical and Statistical Psychology, 63*(3), 603–626.
+- Harville, D. A. (1977). Maximum likelihood approaches to variance component estimation and to related problems. *Journal of the American Statistical Association, 72*(358), 320–338.
+- Holm, S. (1979). A simple sequentially rejective multiple test procedure. *Scandinavian Journal of Statistics, 6*(2), 65–70.
+- Huang, A., & Wand, M. P. (2013). Simple marginally noninformative prior distributions for covariance matrices. *Bayesian Analysis, 8*(2), 439–452.
+- Janssen, R., Schepers, J., & Peres, D. (2004). Models with item and item group predictors. In P. De Boeck & M. Wilson (Eds.), *Explanatory item response models* (pp. 189–212). Springer.
+- Julier, S. J., & Uhlmann, J. K. (2004). Unscented filtering and nonlinear estimation. *Proceedings of the IEEE, 92*(3), 401–422.
+- Liu, J. S., & Sabatti, C. (2000). Generalised Gibbs sampler and multigrid Monte Carlo for Bayesian computation. *Biometrika, 87*, 353–369.
+- Louis, T. A. (1982). Finding the observed information matrix when using the EM algorithm. *Journal of the Royal Statistical Society: Series B, 44*(2), 226–233.
+- Man, K., Harring, J. R., Jiao, H., & Zhan, P. (2019). Joint modeling of compensatory multidimensional item responses and response times. *Applied Psychological Measurement, 43*(8), 639–654.
+- Meng, X.-L., & Rubin, D. B. (1993). Maximum likelihood estimation via the ECM algorithm: A general framework. *Biometrika, 80*(2), 267–278.
+- O'Hagan, A. (1976). On posterior joint and marginal modes. *Biometrika, 63*(2), 329–333.
+- Plummer, M. (2015). Cuts in Bayesian graphical models. *Statistics and Computing, 25*, 37–43.
+- Polson, N. G., Scott, J. G., & Windle, J. (2013). Bayesian inference for logistic models using Pólya–Gamma latent variables. *Journal of the American Statistical Association, 108*, 1339–1349.
+- Rao, C. R. (1948). Large sample tests of statistical hypotheses concerning several parameters with applications to problems of estimation. *Mathematical Proceedings of the Cambridge Philosophical Society, 44*(1), 50–57.
+- Roberts, G. O., & Tweedie, R. L. (1996). Exponential convergence of Langevin distributions and their discrete approximations. *Bernoulli, 2*, 341–363.
+- Sinharay, S. (2020). Detection of item preknowledge using response times. *Applied Psychological Measurement, 44*(5), 376–392.
+- Sörbom, D. (1989). Model modification. *Psychometrika, 54*(3), 371–384.
+- van der Linden, W. J. (2007). A hierarchical framework for modeling speed and accuracy on test items. *Psychometrika, 72*(3), 287–308.

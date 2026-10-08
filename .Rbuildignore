@@ -1,0 +1,12 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^cran-comments\.md$
+^inst/tutorial/.*\.html$
+^inst/tutorial/.*_files$
+^inst/tutorial/render\.log$
+^.*\.Rcheck$
+^inst/tutorial/.*\.rmarkdown$
+^TODO\.md$
+^.*Rplots\.pdf$
+^\.gitignore$
+^\.github$

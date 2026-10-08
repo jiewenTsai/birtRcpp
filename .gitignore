@@ -1,0 +1,12 @@
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+.DS_Store
+src/*.o
+src/*.so
+src/*.dll
+*.Rcheck/
+*.tar.gz
+inst/tutorial/*.html
+inst/tutorial/*_files/

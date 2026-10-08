@@ -1,0 +1,109 @@
+---
+title: "Getting started with birtRcpp"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with birtRcpp}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+`birtRcpp` fits joint models of response accuracy and response time. The main estimator is
+`ecm()`: maximum marginal likelihood by the ECM algorithm (Meng & Rubin, 1993), with standard
+errors, AIC and BIC, usually in about a second. `gibbs()` samples the posterior of the same
+model, starting from the ECM solution. Both are written in C++. The package ports the Julia
+package ExtendedRtIrtModeling.jl, with corrected full conditionals. Notation: j indexes
+persons, i items.
+
+| constructor | model |
+|---|---|
+| `mlirt()` | 2PL (or 1PL) with a latent regression of ability |
+| `rtirt_null()` | 2PL + log-normal response times (van der Linden, 2007) |
+| `rtirt_latreg()` | ... with latent regressions of ability and speed |
+| `rtirt_latent()` | speed regressed on ability and covariates; `quantile =` for quantile regression |
+| `rtirt_cross()` | cross-relations of ability with each log response time; `quantile =` |
+
+## Data
+
+`input_data()` takes responses, response times (in seconds) and centred covariates, either
+as matrices or as column names of a data frame:
+
+```{r}
+library(birtRcpp)
+set.seed(1)
+cond <- set_cond(n_subj = 300, n_item = 8, n_feat = 2)
+sim <- sim_data(cond, sim_para(cond, "latent"), "latent")
+raw <- data.frame(sim$Y, sim$T, sim$X)
+names(raw) <- c(paste0("y", 1:8), paste0("t", 1:8), "x1", "x2")
+dat <- input_data(resp = paste0("y", 1:8), time = paste0("t", 1:8), cov = c("x1", "x2"), data = raw)
+dat
+```
+
+## Maximum likelihood with ECM
+
+ECM integrates ability over Gauss-Hermite nodes and speed in closed form. Each M step is
+split into conditional maximizations, one per block of parameters, and each has a closed
+form: the logistic item block through the Polya-Gamma bound (Polson, Scott & Windle, 2013),
+the response-time and structural blocks as normal models. The log-likelihood never
+decreases; SQUAREM accelerates it, and the standard errors come from the observed
+information.
+
+```{r}
+fit <- ecm(rtirt_latent(dat))
+fit
+estimates(fit, pars = "beta|b_ability")   # est, se, z, Wald 95% interval
+head(scores(fit))                         # EAP and posterior SD of ability and speed
+c(logLik = logLik(fit), AIC = AIC(fit), BIC = BIC(fit))
+```
+
+Nested models compare by a likelihood-ratio test; `rtirt_null()` is `rtirt_latreg()`
+without covariates:
+
+```{r}
+f0 <- ecm(rtirt_null(dat))      # warns that rtirt_null() ignores the covariates
+f1 <- ecm(rtirt_latreg(dat))
+lr <- 2 * (logLik(f1) - logLik(f0))
+c(LR = lr, df = f1$ecm$npar - f0$ecm$npar,
+  p = pchisq(lr, f1$ecm$npar - f0$ecm$npar, lower.tail = FALSE))
+```
+
+Other settings: `nodes` (Gauss-Hermite nodes, default 41), `max_iter`, `tol`, `se`,
+`accelerate`, and `prior = "map"` with `priors = rtirt_priors(...)` for the posterior mode
+in the item parameters (small samples).
+
+## Gibbs from the ECM solution
+
+```{r}
+g <- gibbs(fit, n_iter = 1500, n_chain = 2, init = "ecm", seed = 1, verbose = FALSE)
+estimates(g, pars = "beta|b_ability")     # posterior mean, SD, 95% interval, R-hat, ESS
+convergence(g)
+```
+
+## Quantile models (Gibbs only)
+
+Quantile models use the asymmetric Laplace working likelihood, so `ecm()` refuses them.
+For several quantile levels, give a vector; the result holds one model per level:
+
+```{r}
+qs <- gibbs(rtirt_latent(dat, quantile = c(0.25, 0.5, 0.75)), n_iter = 1000, n_chain = 2,
+            seed = 1, verbose = FALSE)
+qs
+```
+
+Use longer chains in practice (the defaults are `n_iter = 5000`, `n_chain = 4`) and check
+`convergence()`. The tutorial `system.file("tutorial", "birtRcpp_intro.qmd", package = "birtRcpp")`
+(in Traditional Chinese) explains every line and output.
+
+## References
+
+Meng, X.-L., & Rubin, D. B. (1993). Maximum likelihood estimation via the ECM algorithm: A
+general framework. *Biometrika, 80*, 267-278.
+
+Polson, N. G., Scott, J. G., & Windle, J. (2013). Bayesian inference for logistic models using
+Polya-Gamma latent variables. *Journal of the American Statistical Association, 108*, 1339-1349.
+
+van der Linden, W. J. (2007). A hierarchical framework for modeling speed and accuracy on test
+items. *Psychometrika, 72*, 287-308.
