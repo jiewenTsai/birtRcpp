@@ -2,7 +2,7 @@
 % Please edit documentation in R/model_vi.R
 \name{check_vi}
 \alias{check_vi}
-\title{Check a CAVI fit}
+\title{Check a CAVI fit (deprecated)}
 \usage{
 check_vi(
   model,
@@ -16,8 +16,6 @@ check_vi(
 )
 }
 \arguments{
-\item{model}{A \code{\link[=block_model]{block_model()}}.}
-
 \item{steps}{Steps, as for \code{\link[=gibbs]{gibbs()}} (the same list can be used for both); by default
 Gibbs (conditional maximization) where possible and MALA (gradient) otherwise.}
 
@@ -42,9 +40,10 @@ common nodes; use the adaptive nodes when a latent variable has a narrow posteri
 A data frame with one row per check (class \code{em_check}, printed like \code{\link[=check_ecm]{check_ecm()}}).
 }
 \description{
-The CAVI counterpart of \code{\link[=check_ecm]{check_ecm()}} and the Geweke check: coordinate ascent is right when
+\strong{Deprecated} with \code{\link[=vi]{vi()}}.
 }
 \details{
+The CAVI counterpart of \code{\link[=check_ecm]{check_ecm()}} and the Geweke check: coordinate ascent is right when
 \enumerate{
 \item \strong{the ELBO never decreases} from one sweep to the next (from \code{n_start} starting values drawn
 from the declared priors, on a fixed grid); and

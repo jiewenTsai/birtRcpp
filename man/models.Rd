@@ -7,7 +7,7 @@
 \alias{rtirt_latreg}
 \alias{rtirt_latent}
 \alias{rtirt_cross}
-\title{Model constructors}
+\title{Model constructors (deprecated)}
 \usage{
 mlirt(
   data,
@@ -87,10 +87,12 @@ all, \code{plot()} draws the coefficients against the level).}
 A model object of class \verb{c(<model>, "rtirt")}; see \code{\link[=gibbs]{gibbs()}}.
 }
 \description{
-Create a model object from \code{\link[=input_data]{input_data()}}, then sample it with \code{\link[=gibbs]{gibbs()}}:
+\strong{Deprecated}: name the model in \code{\link[=ecm]{ecm()}} or \code{\link[=gibbs]{gibbs()}} instead, e.g.
+\code{rtirt_cross(dat)} becomes \code{ecm(dat, model = "cross")} or \code{gibbs(dat, model = "cross")}.
+The constructors still work (with a warning once per session) and get no new features.
 }
 \details{
-\if{html}{\out{<div class="sourceCode">}}\preformatted{fit <- gibbs(rtirt_cross(dat, quantile = 0.25), n_iter = 10000, n_chain = 3, seed = 1)
+\if{html}{\out{<div class="sourceCode">}}\preformatted{fit <- gibbs(dat, model = "cross", quantile = 0.25, n_iter = 10000, n_chain = 3, seed = 1)
 }\if{html}{\out{</div>}}
 \itemize{
 \item \code{mlirt}: 2PL with a latent regression of ability (no response times).

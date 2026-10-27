@@ -4,10 +4,10 @@
 \alias{ecm.block_model}
 \alias{print.block_model_ecm}
 \alias{algorithm.block_model_ecm}
-\title{ECM for a declared model}
+\title{ECM for a declared model (deprecated)}
 \usage{
 \method{ecm}{block_model}(
-  model,
+  data,
   steps = NULL,
   latent = NULL,
   nodes = NULL,
@@ -27,7 +27,7 @@
 \method{algorithm}{block_model_ecm}(object, format = c("unicode", "latex"), ...)
 }
 \arguments{
-\item{model}{A \code{\link[=block_model]{block_model()}}.}
+\item{data}{A \code{\link[=block_model]{block_model()}}.}
 
 \item{steps}{Steps, as for \code{\link[=gibbs]{gibbs()}} (the same list can be used for both); by default
 Gibbs (conditional maximization) where possible and MALA (gradient) otherwise.}
@@ -75,11 +75,12 @@ A \code{block_em} (see \code{\link[=run_em]{run_em()}}) with \code{latent} (post
 \code{steps} and \code{cycles}; \code{algorithm(fit)} lists the E- and M-steps.
 }
 \description{
+\strong{Deprecated} with \code{\link[=block_model]{block_model()}}: use the built-in models, \code{ecm(data, model = ...)}.
+}
+\details{
 Fits a \code{\link[=block_model]{block_model()}} by EM with the same steps as \code{\link[=gibbs]{gibbs()}}. Gibbs and EM share the
 full conditionals of the model: a step that a sampler uses to \strong{draw} a parameter is used by EM to
 move the parameter to the \strong{mode} of its full conditional averaged over the latent variables.
-}
-\details{
 \itemize{
 \item \strong{E-step:} the person parameters (\code{latent}, by default every \verb{[person]} parameter) are
 integrated out by adaptive Gauss–Hermite quadrature: a product grid of \code{nodes} points per

@@ -64,7 +64,14 @@ estimates <- function(object, ...) UseMethod("estimates")
 #' @rdname estimates
 #' @export
 estimates.rtirt <- function(object, pars = NULL, method = c("auto", "gibbs", "ecm"), diagnostics = c("classic", "rank"), ...) {
-  method <- match.arg(method); diagnostics <- match.arg(diagnostics)
+  table <- estimates_rtirt(object, pars, method, diagnostics)
+  tibble::as_tibble(table)
+}
+
+# the parameter table of estimates(), as a data frame
+estimates_rtirt <- function(object, pars, method, diagnostics) {
+  method <- match.arg(method, c("auto", "gibbs", "ecm"))
+  diagnostics <- match.arg(diagnostics, c("classic", "rank"))
   if (method == "ecm" || (method == "auto" && has_em(object))) {
     need_em(object); e <- object$ecm$estimates
     return(if (is.null(pars)) e else e[grepl(pars, e$parameter), , drop = FALSE])
@@ -171,7 +178,7 @@ summary.rtirt <- function(object, digits = 3, ...) {
 #' Posterior means (EAP) and posterior SDs of ability and speed, one row per person.
 #' @param object A sampled model.
 #' @param ... Unused.
-#' @return A data frame with `id`, `ability`, `ability_psd` and (RT models) `speed`, `speed_psd`.
+#' @return A tibble with `id`, `ability`, `ability_psd` and (RT models) `speed`, `speed_psd`.
 #' @export
 scores <- function(object, ...) UseMethod("scores")
 
@@ -181,7 +188,7 @@ scores.rtirt <- function(object, ...) {
   p <- if (has_em(object)) object$ecm$person else { need_post(object); object$post$person }
   out <- data.frame(id = object$data$id, ability = p$theta$mean, ability_psd = p$theta$sd)
   if (!is.null(p$zeta)) { out$speed <- p$zeta$mean; out$speed_psd <- p$zeta$sd }
-  out
+  tibble::as_tibble(out)
 }
 
 #' Empirical reliability
@@ -219,11 +226,11 @@ fit_indices <- function(object, ...) UseMethod("fit_indices")
 #' @export
 fit_indices.rtirt <- function(object, ...) {
   if (has_em(object)) { f <- object$ecm
-    return(data.frame(method = if (f$map) "ECM (MAP items)" else "ECM", logLik = f$logLik, npar = f$npar, N = f$nobs,
-                      AIC = f$AIC, BIC = f$BIC)) }
+    return(tibble::tibble(method = if (f$map) "ECM (MAP items)" else "ECM", logLik = f$logLik, npar = f$npar, N = f$nobs,
+                          AIC = f$AIC, BIC = f$BIC)) }
   need_post(object)
   m <- object$post$fit %||% { message("computing the marginal log-likelihood ..."); marginal_fit(object) }
-  cbind(m$table, DIC_complete = dic(object)$dic)
+  tibble::as_tibble(cbind(m$table, DIC_complete = dic(object)$dic))
 }
 
 # marginal-likelihood criteria (stored by gibbs(fit_indices = TRUE))
@@ -316,7 +323,7 @@ convergence.rtirt <- function(object, ess = 400, rhat = NULL, diagnostics = c("c
   }
   diagnostics <- match.arg(diagnostics); rhat <- rhat %||% if (diagnostics == "rank") 1.01 else 1.05
   p <- estimates(object, diagnostics = diagnostics)
-  tail_ok <- if (is.null(p$ess_tail)) TRUE else p$ess_tail > ess
+  tail_ok <- if (!"ess_tail" %in% names(p)) TRUE else p$ess_tail > ess
   ok <- p$ess > ess & (is.na(p$rhat) | p$rhat < rhat) & tail_ok
   cols <- intersect(c("parameter", "rhat", "ess", "ess_tail"), names(p))
   out <- list(share = mean(ok), worst = p[order(-p$rhat), cols][1:min(5, nrow(p)), ])
@@ -344,8 +351,8 @@ compare_para <- function(object, par = "a") {
   if (is.null(src[[par]])) stop(sprintf("'%s' is not among the estimates of this fit", lab), call. = FALSE)
   est <- as.numeric(src[[par]]); tru <- as.numeric(object$true_para[[par]])
   if (length(est) != length(tru)) stop(sprintf("'%s': %d estimates vs %d true values", par, length(est), length(tru)))
-  data.frame(par = lab, n = length(est), bias = get_bias(est, tru), rmse = get_rmse(est, tru),
-             corr = if (length(est) > 2 && stats::sd(est) > 0 && stats::sd(tru) > 0) stats::cor(est, tru) else NA_real_)
+  tibble::tibble(par = lab, n = length(est), bias = get_bias(est, tru), rmse = get_rmse(est, tru),
+                 corr = if (length(est) > 2 && stats::sd(est) > 0 && stats::sd(tru) > 0) stats::cor(est, tru) else NA_real_)
 }
 
 #' @importFrom coda as.mcmc.list
@@ -433,8 +440,10 @@ coef.rtirt_qset <- function(object, ...) {
 
 #' @rdname rtirt_qset
 #' @export
-estimates.rtirt_qset <- function(object, ...)
-  do.call(rbind, Map(function(m, q) cbind(q = q, estimates(m)), object$models, object$quantile))
+estimates.rtirt_qset <- function(object, ...) {
+  tables <- Map(function(m, q) cbind(q = q, estimates_rtirt(m, NULL, "auto", "classic")), object$models, object$quantile)
+  tibble::as_tibble(do.call(rbind, tables))
+}
 
 #' @rdname rtirt_qset
 #' @export
@@ -459,7 +468,9 @@ plot.rtirt_qset <- function(x, pars = NULL, ...) {
 }
 
 #' @export
-gibbs.default <- function(model, ...) stop("model must be a model object, e.g. rtirt_cross(data), or a block_model()", call. = FALSE)
+gibbs.default <- function(data, ...) {
+  stop("data must come from input_data(), e.g. gibbs(input_data(...), model = \"cross\")", call. = FALSE)
+}
 
 # plain table (as in birt): numbers right-aligned with fixed decimals, text left-aligned
 print_table <- function(df, digits = 3) {

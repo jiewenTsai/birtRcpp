@@ -51,12 +51,14 @@ new_model <- function(type, data, cond = NULL, true_para = NULL, para = NULL, qu
             class = c(type, "rtirt"))
 }
 
-#' Model constructors
+#' Model constructors (deprecated)
 #'
-#' Create a model object from [input_data()], then sample it with [gibbs()]:
+#' **Deprecated**: name the model in [ecm()] or [gibbs()] instead, e.g.
+#' `rtirt_cross(dat)` becomes `ecm(dat, model = "cross")` or `gibbs(dat, model = "cross")`.
+#' The constructors still work (with a warning once per session) and get no new features.
 #'
 #' ```
-#' fit <- gibbs(rtirt_cross(dat, quantile = 0.25), n_iter = 10000, n_chain = 3, seed = 1)
+#' fit <- gibbs(dat, model = "cross", quantile = 0.25, n_iter = 10000, n_chain = 3, seed = 1)
 #' ```
 #'
 #' * `mlirt`: 2PL with a latent regression of ability (no response times).
@@ -94,78 +96,130 @@ NULL
 
 #' @rdname models
 #' @export
-mlirt <- function(data, itemtype = c("2pl", "1pl"), intercept = FALSE, cond = NULL, true_para = NULL, para = NULL)
+mlirt <- function(data, itemtype = c("2pl", "1pl"), intercept = FALSE, cond = NULL, true_para = NULL, para = NULL) {
+  deprecate_constructor("mlirt", "irt")
   new_model("mlirt", data, cond, true_para, para, itemtype = match.arg(itemtype), intercept = intercept)
+}
 #' @rdname models
 #' @export
-rtirt_null <- function(data, speed_var = c("free", "fixed"), itemtype = c("2pl", "1pl"), cond = NULL, true_para = NULL, para = NULL)
+rtirt_null <- function(data, speed_var = c("free", "fixed"), itemtype = c("2pl", "1pl"), cond = NULL, true_para = NULL, para = NULL) {
+  deprecate_constructor("rtirt_null", "null")
   new_model("rtirt_null", data, cond, true_para, para, speed_var = match.arg(speed_var), itemtype = match.arg(itemtype))
+}
 #' @rdname models
 #' @export
 rtirt_latreg <- function(data, speed_var = c("free", "fixed"), itemtype = c("2pl", "1pl"), intercept = FALSE,
-                         cond = NULL, true_para = NULL, para = NULL)
+                         cond = NULL, true_para = NULL, para = NULL) {
+  deprecate_constructor("rtirt_latreg", "latreg")
   new_model("rtirt_latreg", data, cond, true_para, para, speed_var = match.arg(speed_var), itemtype = match.arg(itemtype),
             intercept = intercept)
+}
 #' @rdname models
 #' @export
 rtirt_latent <- function(data, quantile = NULL, itemtype = c("2pl", "1pl"), intercept = FALSE, cond = NULL,
-                         true_para = NULL, para = NULL)
+                         true_para = NULL, para = NULL) {
+  deprecate_constructor("rtirt_latent", "latent")
   new_model("rtirt_latent", data, cond, true_para, para, quantile, itemtype = match.arg(itemtype), intercept = intercept)
+}
 #' @rdname models
 #' @export
 rtirt_cross <- function(data, quantile = NULL, speed_var = c("free", "fixed"), itemtype = c("2pl", "1pl"),
-                        cond = NULL, true_para = NULL, para = NULL)
+                        cond = NULL, true_para = NULL, para = NULL) {
+  deprecate_constructor("rtirt_cross", "cross")
   new_model("rtirt_cross", data, cond, true_para, para, quantile, speed_var = match.arg(speed_var), itemtype = match.arg(itemtype))
+}
 
 #' Run the Gibbs sampler
 #'
-#' The R counterpart of `sample!(MCMC)`: runs `n_chain` independent chains (each with its
-#' own random starting values) and returns the model with `post` filled in.
+#' Samples a built-in model from its full conditionals: `n_chain` independent chains, each
+#' from its own random starting values or from an [ecm()] fit.
 #'
-#' @param model A model object (see [models]), or an `rtirt_qset` (several quantile levels).
+#' ```
+#' fit_ecm <- ecm(dat, model = "cross")
+#' fit_gibbs <- gibbs(dat, model = "cross", init = fit_ecm)
+#' ```
+#'
+#' @param data Data from [input_data()].
+#' @param model The model, by name:
+#'   * `"irt"`: 2PL (no response times); with covariates, a latent regression of ability.
+#'   * `"null"`: joint RT-IRT (van der Linden, 2007), ability and speed correlated.
+#'   * `"latreg"`: joint RT-IRT with latent regressions of ability and speed on the covariates.
+#'   * `"latent"`: speed regressed on ability and the covariates (mean or, with `quantile`,
+#'     quantile regression).
+#'   * `"cross"`: cross-relations of ability with each log response time (normal or, with
+#'     `quantile`, ALD residuals).
+#'   * `"mixture"`: the mixture model of Wang and Xu (2015); not available yet.
+#' @param itemtype `"2pl"`, `"1pl"` (discriminations fixed at 1) or `"grm"` (not available
+#'   yet); one value, or one per item (all equal for now).
+#' @param speed_var `"free"` (default) estimates the variance of speed; `"fixed"` sets it to 1
+#'   (`"null"`, `"latreg"`, `"cross"`).
+#' @param quantile `NULL` for the mean model, or the quantile level of the ALD model
+#'   (`"latent"`: of speed given ability and covariates; `"cross"`: of each log response
+#'   time). A vector fits one model per level (an `rtirt_qset`).
+#' @param cov Names of the covariates of `data` to use (default all); models without
+#'   covariates ignore them.
+#' @param intercept Add an intercept to the latent regressions (default `FALSE`: the
+#'   covariates are centred and the item parameters carry the location).
+#' @param priors Prior distributions, from [rtirt_priors()] (default: `rtirt_priors()`).
+#' @param n_iter,n_chain Iterations per chain and chains.
+#' @param seed Random seed (`NULL`: the current RNG state).
+#' @param init `"random"` (default): each chain draws its own starting values; an [ecm()]
+#'   fit of the same data and model: start the chains at its estimates and EAP scores, which
+#'   shortens the burn-in; `"ecm"`: run [ecm()] first and start there.
+#' @param control Further sampler settings, from [gibbs_control()].
+#' @param ... Unused.
+#' @return A fitted model with `post`: `draws` (a `coda::mcmc.list` of the item and structural
+#'   parameters, all iterations), `mean` (posterior means after burn-in, an [input_para()]),
+#'   `person` (posterior mean and SD of ability and speed), `loglik` (complete-data
+#'   log-likelihood per iteration and chain) and `secs`. Accessors: `summary()`, `coef()`,
+#'   [estimates()], [scores()], [reliability()], [convergence()], [fit_indices()], `plot()`.
+#' @references Wang, C., & Xu, G. (2015). A mixture hierarchical model for response times and
+#'   response accuracy. *British Journal of Mathematical and Statistical Psychology*, 68,
+#'   456-477.
+#' @examples
+#' \donttest{
+#' cond <- set_cond(n_subj = 300, n_item = 8)
+#' dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
+#' fit <- gibbs(dat, model = "cross", n_iter = 1000, n_chain = 2, seed = 1)
+#' summary(fit)
+#' head(scores(fit))
+#' }
+#' @export
+gibbs <- function(data, ...) UseMethod("gibbs")
+
+#' Sample a model object (deprecated)
+#'
+#' The interface before `gibbs(data, model = ...)`: [gibbs()] on a model object from the
+#' deprecated constructors ([models]), or on an [ecm()] fit with `init = "ecm"`. Use
+#' `gibbs(data, model = ..., init = fit_ecm)` instead.
+#'
+#' @param data A model object (see [models]), an [ecm()] fit, or an `rtirt_qset` (several
+#'   quantile levels).
 #' @param n_iter,n_chain,n_burnin,n_thin Iterations per chain, chains, burn-in (default
 #'   `n_iter / 2`) and thinning of the stored draws. Defaults: the `cond` of the model
 #'   (5000 iterations, 4 chains when no `cond` was given).
 #' @param seed Random seed (`NULL`: the current RNG state).
 #' @param intercept,itemtype Override the settings of the constructor.
-#' @param verbose Print a line per chain.
-#' @param fit_indices Compute the marginal log-likelihood after sampling (for DIC, WAIC and
-#'   PSIS-LOO in [fit_indices()]; see [marginal_loglik()]). `FALSE` skips it (it can take
-#'   seconds to a minute for large `rtirt_cross` quantile models); [fit_indices()] then
-#'   computes it on request.
-#' @param init `"random"` (default): each chain draws its own starting values; `"ecm"`:
-#'   start the chains near the maximum likelihood estimates and EAP scores of [ecm()] (run
-#'   first when the model has no ECM fit with the same settings), which shortens the burn-in.
-#' @param priors Prior distributions, from [rtirt_priors()] (default: `rtirt_priors()`).
-#' @param collapse `FALSE` (default): the Gibbs sampler of ExtendedRtIrtModeling.jl, plus the
-#'   two group moves. `TRUE`: a partially collapsed Gibbs sampler (van Dyk & Park, 2008).
-#'   Given the Polya-Gamma (and ALD) variables the model is linear-Gaussian, so speed is
-#'   integrated out in closed form when ability, the RT item parameters (lambda, and rho of
-#'   `rtirt_cross()`) and, in `rtirt_latent()`, the structural regression are drawn, and speed
-#'   is drawn after them; in `mlirt()` the regression coefficients are drawn with ability
-#'   integrated out. The 2PL item parameters (a, b) are drawn jointly with the Polya-Gamma
-#'   variables integrated out (a Metropolis-Hastings step with a Fisher-scoring proposal;
-#'   the acceptance rate is in `post$ab_accept`). Same posterior, fewer slow directions.
-#' @param ... Unused.
-#' @return The model with `post`: `draws` (a `coda::mcmc.list` of the item and structural
-#'   parameters, all iterations), `mean` (posterior means after burn-in, an [input_para()]),
-#'   `person` (posterior mean and SD of ability and speed), `loglik` (complete-data
-#'   log-likelihood per iteration and chain) and `secs`. Accessors: `summary()`, `coef()`,
-#'   [estimates()], [scores()], [reliability()], [convergence()], [fit_indices()], `plot()`.
-#' @examples
-#' \donttest{
-#' cond <- set_cond(n_subj = 300, n_item = 8)
-#' dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
-#' fit <- gibbs(rtirt_cross(dat), n_iter = 1000, n_chain = 2, seed = 1)
-#' summary(fit)
-#' head(scores(fit))
-#' }
-#' @export
-gibbs <- function(model, ...) UseMethod("gibbs")
+#' @param verbose,fit_indices,collapse See [gibbs_control()].
+#' @param init `"random"` or `"ecm"`.
+#' @param priors Prior distributions, from [rtirt_priors()].
+#' @param ... Passed to the sampler (`rtirt_qset`); otherwise unused.
+#' @return The model with `post`, as [gibbs()].
+#' @name gibbs_model
+#' @keywords internal
+NULL
 
-#' @rdname gibbs
+#' @rdname gibbs_model
 #' @export
-gibbs.rtirt <- function(model, n_iter = NULL, n_chain = NULL, n_burnin = NULL, n_thin = NULL, seed = NULL,
+gibbs.rtirt <- function(data, ...) {
+  if (has_em(data)) {
+    deprecate_warn("gibbs(fit, init = \"ecm\")", "gibbs(data, model = ..., init = fit)")
+  }
+  gibbs_rtirt(data, ...)
+}
+
+# the sampler of a model object
+gibbs_rtirt <- function(model, n_iter = NULL, n_chain = NULL, n_burnin = NULL, n_thin = NULL, seed = NULL,
                         intercept = NULL, itemtype = NULL, verbose = TRUE, fit_indices = TRUE,
                         init = c("random", "ecm"), priors = NULL, collapse = FALSE, ...) {
   init <- match.arg(init)
@@ -224,12 +278,12 @@ gibbs.rtirt <- function(model, n_iter = NULL, n_chain = NULL, n_burnin = NULL, n
   model
 }
 
-#' @rdname gibbs
+#' @rdname gibbs_model
 #' @export
-gibbs.rtirt_qset <- function(model, seed = NULL, ...) {
+gibbs.rtirt_qset <- function(data, seed = NULL, ...) {
   if (!is.null(seed)) set.seed(seed)
-  model$models <- lapply(model$models, gibbs, ...)
-  model
+  data$models <- lapply(data$models, gibbs_rtirt, ...)
+  data
 }
 
 # residual variances to start from: a time column without variation has variance 0, and 1 / 0

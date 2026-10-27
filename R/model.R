@@ -7,7 +7,11 @@
 
 MODEL_DISTS <- c("normal", "bernoulli_logit", "half_t", "inv_gamma")
 
-#' Declare a model for the building blocks
+#' Declare a model for the building blocks (deprecated)
+#'
+#' **Deprecated**: `block_model()` and its steps still work (with a warning once per session) but
+#' get no new features. Use the built-in models, `ecm(data, model = ...)` and
+#' `gibbs(data, model = ...)`.
 #'
 #' `block_model()` declares a model once, the way PyMC does: the data, and one line
 #' `name ~ distribution(...)` per parameter and per observed matrix. Samplers are then stacked as
@@ -58,6 +62,7 @@ MODEL_DISTS <- c("normal", "bernoulli_logit", "half_t", "inv_gamma")
 #' algorithm(fit)
 #' @export
 block_model <- function(...) {
+  deprecate_warn("block_model()", "the built-in models, ecm(data, model = ...) or gibbs(data, model = ...)")
   env <- parent.frame()
   args <- as.list(substitute(list(...)))[-1]
   nm <- names(args) %||% rep("", length(args))
@@ -272,14 +277,22 @@ NULL
 
 #' @rdname block_steps
 #' @export
-step_gibbs <- function(..., cut = character()) structure(list(type = "gibbs", vars = vapply(as.list(substitute(list(...)))[-1], deparse1, ""),
-                                                             cut = as.character(cut)), class = "block_step")
+step_gibbs <- function(..., cut = character()) {
+  deprecate_warn("step_gibbs()", "the built-in models, ecm(data, model = ...) or gibbs(data, model = ...)")
+  vars <- vapply(as.list(substitute(list(...)))[-1], deparse1, "")
+  structure(list(type = "gibbs", vars = vars, cut = as.character(cut)), class = "block_step")
+}
 #' @rdname block_steps
 #' @export
-step_mala <- function(..., step = 0.1) structure(list(type = "mala", vars = vapply(as.list(substitute(list(...)))[-1], deparse1, ""), step = step), class = "block_step")
+step_mala <- function(..., step = 0.1) {
+  deprecate_warn("step_mala()", "the built-in models, ecm(data, model = ...) or gibbs(data, model = ...)")
+  vars <- vapply(as.list(substitute(list(...)))[-1], deparse1, "")
+  structure(list(type = "mala", vars = vars, step = step), class = "block_step")
+}
 #' @rdname block_steps
 #' @export
 step_shift <- function(...) {
+  deprecate_warn("step_shift()", "the built-in models, ecm(data, model = ...) or gibbs(data, model = ...)")
   a <- as.list(substitute(list(...)))[-1]
   if (is.null(names(a)) || any(!nzchar(names(a)))) stop("step_shift(): give name = direction for each parameter, e.g. step_shift(theta = 1, b = 1)", call. = FALSE)
   structure(list(type = "shift", vars = names(a), along = a), class = "block_step")
@@ -528,13 +541,15 @@ data_start <- function(M, s, given = character()) {
   s
 }
 
-#' Sample a declared model with stacked steps
+#' Sample a declared model with stacked steps (deprecated)
+#'
+#' **Deprecated** with [block_model()]: use the built-in models, `gibbs(data, model = ...)`.
 #'
 #' Runs the steps once per iteration in the order given (see [block_steps]) with [run_sampler()]
 #' (chains, burn-in, storage, summary). Without `steps`, every parameter that has a Gibbs step gets
 #' one (in the order of the declarations) and the others get MALA.
 #'
-#' @param model A [block_model()].
+#' @param data A [block_model()].
 #' @param steps A list of steps, e.g. `list(step_mala(theta), step_gibbs(a, b))`.
 #' @param n_iter,n_burnin,n_chain,n_thin,seed As in [run_sampler()].
 #' @param init Optional starting values: a named list (one value or one per person/item). The
@@ -546,8 +561,9 @@ data_start <- function(M, s, given = character()) {
 #' @return A `block_fit` (see [run_sampler()]) with the model and the steps; `algorithm(fit)` lists
 #'   the steps with their full conditionals.
 #' @export
-gibbs.block_model <- function(model, steps = NULL, n_iter = 2000, n_burnin = floor(n_iter / 2), n_chain = 2, n_thin = 1, seed = 1,
+gibbs.block_model <- function(data, steps = NULL, n_iter = 2000, n_burnin = floor(n_iter / 2), n_chain = 2, n_thin = 1, seed = 1,
                           init = NULL, monitor = NULL, ...) {
+  model <- data
   if (length(list(...))) warning("unused arguments: ", paste(names(list(...)), collapse = ", "), call. = FALSE)
   if (!inherits(model, "block_model")) stop("model must come from block_model()", call. = FALSE)
   steps <- prepare_steps(model, steps)

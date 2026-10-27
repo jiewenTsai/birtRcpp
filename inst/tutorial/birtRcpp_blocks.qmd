@@ -20,6 +20,10 @@ execute:
   message: false
 ---
 
+::: {.callout-warning}
+**已廢止，不推薦用於新的分析。** `block_model()`、`step_gibbs()`／`step_mala()`／`step_shift()`、`vi()`、`mml()` 仍可用（每個 session 警告一次），但不再加功能。內建模型請用 `ecm(dat, model = "cross")`、`gibbs(dat, model = "cross", init = fit_ecm)`；新模型會加進這個選單。這份教學保留給已經在用積木的人。
+:::
+
 ## 0. 這份教學怎麼讀
 
 **先讀過：** 第一份教學《birtRcpp 入門》，至少前 4 節。

@@ -18,33 +18,40 @@
 
 #' Marginal maximum likelihood (ECM)
 #'
-#' Fits the normal models ([mlirt()], [rtirt_null()], [rtirt_latreg()], [rtirt_latent()] and
-#' [rtirt_cross()] without `quantile`) by maximum marginal likelihood: the EM algorithm of
-#' Bock and Aitkin (1981) with ability integrated by Gauss-Hermite quadrature and speed in
-#' closed form. The item step uses the Polya-Gamma bound of the logistic likelihood (Polson,
-#' Scott & Windle, 2013), so every step is closed form and the log-likelihood never decreases;
+#' Fits a built-in normal model by maximum marginal likelihood: the EM algorithm of Bock and
+#' Aitkin (1981) with ability integrated by Gauss-Hermite quadrature and speed in closed form.
+#' The item step uses the Polya-Gamma bound of the logistic likelihood (Polson, Scott &
+#' Windle, 2013), so every step is closed form and the log-likelihood never decreases;
 #' SQUAREM speeds up convergence. Standard errors come from the observed information (the
 #' numerical derivative of the analytic score). Quantile (ALD) models use [gibbs()].
 #'
 #' The parameterization and identification are those of [gibbs()]: ability has mean
 #' `x'beta` and variance 1, speed mean `x'beta` (no intercepts: the covariates are centred and
-#' the item parameters carry the location). The same object can then be sampled, e.g. with
-#' starting values from the ECM fit: `gibbs(fit, init = "ecm")`.
+#' the item parameters carry the location). The fit starts the Gibbs sampler:
 #'
-#' @param model A model object (see [models]), or a [block_model()] (see [ecm.block_model()]).
-#' @param max_iter Maximum number of ECM (SQUAREM) iterations.
-#' @param tol Convergence: relative change of the log-likelihood below `tol` and largest
-#'   parameter change (unconstrained scale) below `sqrt(tol)`.
-#' @param nodes Gauss-Hermite nodes for ability.
-#' @param se Compute standard errors.
-#' @param prior `"ml"` (maximum likelihood) or `"map"`: `"map"` adds the item priors of `priors` (a, b, lambda, sigma2t and rho; by default
-#'   those of [gibbs()], see [rtirt_priors()]): the posterior mode in the item parameters, for small
-#'   samples. The structural parameters stay maximum likelihood.
+#' ```
+#' fit_ecm <- ecm(dat, model = "cross")
+#' fit_gibbs <- gibbs(dat, model = "cross", init = fit_ecm)
+#' ```
+#'
+#' @param data Data from [input_data()].
+#' @param model The model by name: `"irt"`, `"null"`, `"latreg"`, `"latent"`, `"cross"` or
+#'   `"mixture"` (not available yet); see [gibbs()].
+#' @param itemtype `"2pl"`, `"1pl"` or `"grm"` (not available yet); one value, or one per item
+#'   (all equal for now).
+#' @param speed_var `"free"` (default) or `"fixed"` (variance of speed 1; `"null"`,
+#'   `"latreg"`, `"cross"`).
+#' @param cov Names of the covariates of `data` to use (default all); models without
+#'   covariates ignore them.
+#' @param prior `"ml"` (maximum likelihood) or `"map"`: `"map"` adds the item priors of
+#'   `priors` (a, b, lambda, sigma2t and rho; by default those of [gibbs()], see
+#'   [rtirt_priors()]): the posterior mode in the item parameters, for small samples. The
+#'   structural parameters stay maximum likelihood.
 #' @param priors Prior distributions for `prior = "map"`, from [rtirt_priors()].
-#' @param accelerate Use SQUAREM.
-#' @param verbose Print the log-likelihood every 10 iterations.
+#' @param se Compute standard errors.
+#' @param control Further settings, from [ecm_control()].
 #' @param ... Unused.
-#' @return The model with `ecm`: `estimates` (est, se, z, Wald 95% interval on the log scale
+#' @return A fitted model with `ecm`: `estimates` (est, se, z, Wald 95% interval on the log scale
 #'   for positive parameters and the Fisher-z scale for the correlation), `logLik`, `npar`,
 #'   `AIC`, `BIC`, `iterations`, `converged`, `trace` (log-likelihood per iteration), `vcov`,
 #'   `person` (EAP and posterior SD) and `secs`. Accessors: `print`, `summary`, `coef`,
@@ -61,22 +68,39 @@
 #' @examples
 #' cond <- set_cond(n_subj = 300, n_item = 8)
 #' dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
-#' fit <- ecm(rtirt_cross(dat))
+#' fit <- ecm(dat, model = "cross")
 #' fit
 #' head(estimates(fit))
 #' @export
-ecm <- function(model, ...) UseMethod("ecm")
+ecm <- function(data, ...) UseMethod("ecm")
 
 #' @export
-ecm.default <- function(model, ...) stop("model must be a model object, e.g. rtirt_cross(data), or a block_model()", call. = FALSE)
+ecm.default <- function(data, ...) {
+  stop("data must come from input_data(), e.g. ecm(input_data(...), model = \"cross\")", call. = FALSE)
+}
 
 #' @export
-ecm.rtirt_qset <- function(model, ...) stop("ecm() fits the normal models; quantile models use gibbs()", call. = FALSE)
+ecm.rtirt_qset <- function(data, ...) stop("ecm() fits the normal models; quantile models use gibbs()", call. = FALSE)
 
-#' @rdname ecm
+#' Fit a model object by ECM (deprecated)
+#'
+#' The interface before `ecm(data, model = ...)`: [ecm()] on a model object from the
+#' deprecated constructors ([models]).
+#'
+#' @param data A model object (see [models]).
+#' @param max_iter,tol,nodes,accelerate,verbose See [ecm_control()].
+#' @param se,prior,priors See [ecm()].
+#' @param ... Unused.
+#' @return The fitted model, as [ecm()].
+#' @name ecm_model
+#' @keywords internal
+NULL
+
+#' @rdname ecm_model
 #' @export
-ecm.rtirt <- function(model, max_iter = 1000, tol = 1e-10, nodes = 41, se = TRUE, prior = c("ml", "map"), priors = NULL, accelerate = TRUE,
+ecm.rtirt <- function(data, max_iter = 1000, tol = 1e-10, nodes = 41, se = TRUE, prior = c("ml", "map"), priors = NULL, accelerate = TRUE,
                      verbose = FALSE, ...) {
+  model <- data
   if (length(list(...))) warning("unused arguments: ", paste(names(list(...)), collapse = ", "), call. = FALSE)
   if (isTRUE(model$qr)) stop("ecm() fits the normal models; quantile models use gibbs()", call. = FALSE)
   t0 <- Sys.time(); Q <- nodes; map <- match.arg(prior) == "map"
@@ -415,7 +439,7 @@ print_em <- function(x) {
   else cat(sprintf("  logLik %.3f, npar %d, AIC %.1f, BIC %.1f\n", f$logLik, f$npar, f$AIC, f$BIC))
   rel <- reliability(x)
   cat(sprintf("  Reliability: %s\n", paste(sprintf("%s %.3f", names(rel), rel), collapse = ", ")))
-  cat("Use summary(), coef(), scores(), estimates(), fit_indices(); gibbs(fit, init = \"ecm\") to sample from here.\n")
+  cat("Use summary(), coef(), scores(), estimates(), fit_indices(); gibbs(data, model = ..., init = fit) to sample from here.\n")
 }
 
 #' @export

@@ -15,7 +15,7 @@ scores(object, ...)
 \item{...}{Unused.}
 }
 \value{
-A data frame with \code{id}, \code{ability}, \code{ability_psd} and (RT models) \code{speed}, \code{speed_psd}.
+A tibble with \code{id}, \code{ability}, \code{ability_psd} and (RT models) \code{speed}, \code{speed_psd}.
 }
 \description{
 Posterior means (EAP) and posterior SDs of ability and speed, one row per person.

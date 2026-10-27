@@ -4,7 +4,7 @@
 \alias{block_model}
 \alias{print.block_model}
 \alias{equations.block_model}
-\title{Declare a model for the building blocks}
+\title{Declare a model for the building blocks (deprecated)}
 \usage{
 block_model(...)
 
@@ -24,12 +24,15 @@ built-in models).}
 An object of class \code{block_model}; \code{equations()} prints the model.
 }
 \description{
+\strong{Deprecated}: \code{block_model()} and its steps still work (with a warning once per session) but
+get no new features. Use the built-in models, \code{ecm(data, model = ...)} and
+\code{gibbs(data, model = ...)}.
+}
+\details{
 \code{block_model()} declares a model once, the way PyMC does: the data, and one line
 \code{name ~ distribution(...)} per parameter and per observed matrix. Samplers are then stacked as
 steps that only name the parameters they update (\code{\link[=step_gibbs]{step_gibbs()}}, \code{\link[=step_mala]{step_mala()}}, \code{\link[=step_shift]{step_shift()}},
 run by \code{\link[=gibbs]{gibbs()}}). Each step derives what it needs from the model, so
-}
-\details{
 \itemize{
 \item the steps always target the same posterior (a prior cannot be forgotten in one step);
 \item the Pólya–Gamma variables \eqn{\omega} of a logistic part are hidden: they are drawn

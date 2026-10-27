@@ -6,8 +6,8 @@
 
 從完整條件分配寫出估計法的套件：
 
-- **積木層（主軸）：** 用 `block_model()` 宣告模型。主菜是 `ecm()`（ECM：每一塊參數各自做條件極大化；Pólya–Gamma 下界、自適應或 Bock–Aitkin 積分、常態線性潛在變項精確積分、Louis 標準誤）。同一組步驟也給 `gibbs()`（Gibbs；共軛更新、MALA）和 `vi()`（CAVI）；`mml()` 用 Newton 直接極大化同一個目標。每個引擎都有檢查（`check_ecm()`、`check_sampler()`、`check_vi()`），`algorithm()` 寫出每一步。
-- **內建模型：** ExtendedRtIrtModeling.jl（Tsai, 2025 博士論文第 3–5 章）的 R 版本，C++（RcppArmadillo）寫的 Gibbs 抽樣器，每個模型一個迴圈；Julia 的函數名稱都保留為別名。
+- **內建模型（主軸）：** 像 mirt／TAM 一樣用名字選模型：`ecm(dat, model = "cross")`、`gibbs(dat, model = "cross", init = fit_ecm)`。`model` 選結構（`"irt"`、`"null"`、`"latreg"`、`"latent"`、`"cross"`；`"mixture"` 規劃中），其他參數（`itemtype`、`speed_var`、`quantile`、`cov`）調控細節，少用的引擎設定放在 `ecm_control()`／`gibbs_control()`。ExtendedRtIrtModeling.jl（Tsai, 2025 博士論文第 3–5 章）的 R 版本，C++（RcppArmadillo）寫的 Gibbs 抽樣器；Julia 的函數名稱都保留為別名。
+- **積木層（已廢止）：** `block_model()`、`step_*()`、`vi()`、`mml()` 仍可用（每個 session 警告一次），但不再加功能。
 - **分工：** lavaan 語法、JAGS、RTMB 的自動化流程在姊妹套件 birt。
 
 教學文件有兩份（原始檔在 `inst/tutorial/`）：
@@ -25,17 +25,17 @@ raw <- read.csv("timss2019math.csv")
 items <- names(raw)[6:19]; times <- paste0(items, "_S"); covs <- names(raw)[44:53]
 
 dat <- input_data(resp = items, time = times, cov = covs, id = "IDSTUD", data = raw)
-fit <- gibbs(rtirt_cross(dat, quantile = 0.25), n_iter = 10000, n_chain = 3, seed = 1)
+fit <- gibbs(dat, model = "cross", quantile = 0.25, n_iter = 10000, n_chain = 3, seed = 1)
 
 fit                    # 摘要：信度、DIC、R-hat 警告
 summary(fit)           # 摘要表物件：$fit、$items、$se、$parameters（含 prior）、$covariance、$reliability
 coef(fit)              # 後驗平均數（具名向量）
-estimates(fit)         # 後驗摘要（資料框：est, sd, q025, q975, rhat, ess；欄名與 birt 相同）
+estimates(fit)         # 後驗摘要（tibble：est, sd, q025, q975, rhat, ess；欄名與 birt 相同）
 scores(fit)            # 每人的 ability / speed 後驗平均數與 SD（帶 id）
 reliability(fit); convergence(fit); fit_indices(fit)
 plot(fit)              # 題目參數與 95% 區間；plot(fit, "trace") 軌跡圖
 
-qs <- gibbs(rtirt_cross(dat, quantile = c(.1, .25, .5, .75, .9)), n_iter = 10000, n_chain = 3)
+qs <- gibbs(dat, model = "cross", quantile = c(.1, .25, .5, .75, .9), n_iter = 10000, n_chain = 3)
 coef(qs); plot(qs)     # rho[item] 對分位數的曲線
 ```
 
@@ -50,10 +50,12 @@ coef(qs); plot(qs)     # rho[item] 對分位數的曲線
   - 時間看起來已經取過 log（全部 < 15），或 `log_time` 看起來是秒數時會警告；
   - 0/1 以外的編碼（如 1/2）、遺漏值會報錯並說明怎麼處理；
   - 共變數沒有置中時會警告（潛在回歸沒有截距）；
-  - 模型用不到 `cov` 時（`rtirt_cross`、`rtirt_null`）會警告。
+  - 模型用不到共變數時（`"cross"`、`"null"`）自動略過；明確給了 `cov =` 才會警告。
 - **維度：** 由資料推得，`set_cond()` 只在模擬研究需要。
-- **MCMC 設定：** 是 `gibbs()` 的參數（`n_iter`、`n_chain`、`n_burnin`、`n_thin`、`seed`）。
-- **分位數：** 是模型的參數：`rtirt_cross(dat, quantile = .25)`、`rtirt_latent(dat, quantile = .25)`；給向量就得到一組 `rtirt_qset`。
+- **MCMC 設定：** `n_iter`、`n_chain`、`seed`、`init` 是 `gibbs()` 的參數；`n_burnin`、`n_thin`、`collapse` 等放在 `gibbs_control()`。
+- **分位數：** 是模型的參數：`gibbs(dat, model = "cross", quantile = .25)`、`gibbs(dat, model = "latent", quantile = .25)`；給向量就得到一組 `rtirt_qset`。
+- **表格：** `estimates()`、`scores()`、`fit_indices()` 與 `summary()` 的各表都是 tibble；`summary()` 的表保留原本的印出版面。
+- **舊寫法：** `mlirt()`、`rtirt_null()`、`rtirt_latreg()`、`rtirt_latent()`、`rtirt_cross()` 與 `gibbs(fit, init = "ecm")` 仍可用，會發 deprecation 警告（每個 session 一次）；結果與新寫法相同。
 - **`speed_var`：** `"free"`（預設）估計速度變異數；`"fixed"` 固定為 1（Julia 的 `cov2one = true`）。log 秒數的速度變異數遠小於 1（TIMSS 約 0.09–0.12），第 5 章固定 Var(speed) = 1 會過度限制：以 RTMB 驗證，−2logL 差約 870–930。
 - **參數名稱：**
 
@@ -68,9 +70,9 @@ coef(qs); plot(qs)     # rho[item] 對分位數的曲線
 |---|---|---|
 | `setCond(nSubj=…, qRt=…)` | `set_cond(...)`（只在模擬需要） | `setCond()` |
 | `InputData(Y=, T=, X=)` | `input_data(resp = , time = , cov = , id = , data = )` | `InputData()`、`InputData4R()` |
-| `GibbsMlIrt`、`GibbsRtIrtNull`、`GibbsRtIrt` | `mlirt(dat)`、`rtirt_null(dat)`、`rtirt_latreg(dat)` | 同 Julia 名 |
-| `GibbsRtIrtLatent`、`…Qr` | `rtirt_latent(dat, quantile = NULL / q)` | 同 Julia 名（`Qr` 用 `Cond$q_rt`） |
-| `GibbsRtIrtCross`、`…Qr` | `rtirt_cross(dat, quantile = NULL / q)` | 同 Julia 名 |
+| `GibbsMlIrt`、`GibbsRtIrtNull`、`GibbsRtIrt` | `gibbs(dat, model = "irt")`、`model = "null"`、`model = "latreg"` | 同 Julia 名 |
+| `GibbsRtIrtLatent`、`…Qr` | `gibbs(dat, model = "latent", quantile = NULL / q)` | 同 Julia 名（`Qr` 用 `Cond$q_rt`） |
+| `GibbsRtIrtCross`、`…Qr` | `gibbs(dat, model = "cross", quantile = NULL / q)` | 同 Julia 名 |
 | `sample!(MCMC)` | `fit <- gibbs(model, n_iter = , n_chain = , seed = )` | `sampleGibbs()` |
 | `coef(MCMC)`、`precis(MCMC)` | `summary(fit)`、`precis(fit)` / `estimates(fit)` | — |
 | `getDic`、`checkConvergence` | `dic()` / `fit_indices()`、`convergence()` | 同 Julia 名 |
@@ -94,7 +96,7 @@ coef(qs); plot(qs)     # rho[item] 對分位數的曲線
 - **Pólya–Gamma 變數：** 2PL 的 (a, b) 積掉 PG 變數後，在截距參數化 (a, d = −ab) 下一起抽（Fisher scoring 提議的 Metropolis–Hastings），之後照常做 PG 步驟。
 
 ```r
-fit <- gibbs(rtirt_cross(dat, quantile = 0.1), n_iter = 12000, collapse = TRUE)
+fit <- gibbs(dat, model = "cross", quantile = 0.1, n_iter = 12000, control = gibbs_control(collapse = TRUE))
 ```
 
 - 後驗與原本的抽樣器相同（模擬與 TIMSS 上，所有參數的後驗平均數差異都在蒙地卡羅誤差內）。
@@ -161,16 +163,18 @@ half-t 先驗寫成 σ² | u ~ IG(ν/2, ν/u)、u ~ IG(1/2, 1/A²)；每輪先�
 ## Score-based 的參數不變性檢定：`score_test()`
 
 ```r
-fit <- ecm(rtirt_cross(dat), se = FALSE)
+fit <- ecm(dat, model = "cross", se = FALSE)
 score_test(fit, raw$gender, by_item = TRUE)       # 性別 DIF，逐題並做 Holm 校正
 score_test(fit, rowSums(dat$log_t))               # 沿總作答時間（聯合模型中對 a、b 有效）
 ```
 
 - 只需要一次 `ecm()` 配適。每人的 score 由 `estfun()` 給出，也可以直接交給 strucchange 或 partykit（`mob()`）。
-- 調節變項和能力有關時（impact），請把它放進潛在迴歸（`rtirt_latreg(input_data(..., cov = z))`）再檢定；函數會提醒。
+- 調節變項和能力有關時（impact），請把它放進潛在迴歸（`ecm(input_data(..., cov = z), model = "latreg")`）再檢定；函數會提醒。
 - DIF 樹在 birt：`birt::dif_tree()`（partykit 的 `mob()`，節點用 RTMB 最大概似）。
 
-## 積木：宣告模型，用 Gibbs、ECM、CAVI 估計（`?block_model`）
+## 積木：宣告模型，用 Gibbs、ECM、CAVI 估計（`?block_model`；已廢止）
+
+> **已廢止。** `block_model()`、`step_gibbs()`／`step_mala()`／`step_shift()`、`vi()`、`mml()` 仍可用（每個 session 警告一次），但不再加功能；新模型改加進 `ecm()`／`gibbs()` 的內建選單。
 
 分工：birt 是整套自動估計（JAGS、RTMB、Laplace、ELGM）；birtRcpp 的積木是「逐塊用完整條件分配」的估計法，模型宣告一次，三種估計法共用同一份步驟清單：
 
@@ -200,12 +204,12 @@ check_sampler(m, steps = steps); check_ecm(m, steps); check_vi(m)   # 三種檢�
 
 ## 最大概似：`ecm()`
 
-常態模型（`mlirt`、`rtirt_null`、`rtirt_latreg`、`rtirt_latent`、`rtirt_cross`，不含 `quantile`）可以用 Bock–Aitkin EM 估計邊際最大概似：
+常態模型（`"irt"`、`"null"`、`"latreg"`、`"latent"`、`"cross"`，不含 `quantile`）可以用 Bock–Aitkin EM 估計邊際最大概似：
 
 ```r
-fit <- ecm(rtirt_cross(dat))      # 估計值、標準誤、logLik、AIC、BIC
+fit <- ecm(dat, model = "cross")      # 估計值、標準誤、logLik、AIC、BIC
 fit; summary(fit); estimates(fit); scores(fit); fit_indices(fit); logLik(fit); vcov(fit)
-g <- gibbs(fit, init = "ecm")     # 從 EM 解出發抽樣，縮短 burn-in
+g <- gibbs(dat, model = "cross", init = fit)     # 從 EM 解出發抽樣，縮短 burn-in
 estimates(g, method = "em")      # 抽樣後仍可取出 EM 的表
 ```
 

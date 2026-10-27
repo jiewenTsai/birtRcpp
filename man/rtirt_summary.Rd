@@ -34,7 +34,7 @@
 object: \code{header}, \code{fit} (fit indices), \code{items} and \code{se} (one row per item: a, b, lambda,
 sigma2t, rho and their posterior SDs or standard errors), \code{parameters} (one row per
 parameter with its interval and, for Gibbs fits, its prior, as in blavaan), \code{covariance}
-(person covariance) and \code{reliability}. Each element is a data frame; \code{as.data.frame()}
+(person covariance) and \code{reliability}. Each element is a tibble; \code{as.data.frame()}
 returns \code{parameters}. \code{print()} shows the tables under their names, so \code{s$items} gets the
 one printed as \verb{$items}.
 }

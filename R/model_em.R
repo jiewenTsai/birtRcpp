@@ -6,7 +6,9 @@
 # quadrature (E-step); step_gibbs() <-> the mode of the expected full conditional (CM step);
 # step_mala() <-> gradient ascent on Q (generalized EM). Persons j are rows, items i columns.
 
-#' ECM for a declared model
+#' ECM for a declared model (deprecated)
+#'
+#' **Deprecated** with [block_model()]: use the built-in models, `ecm(data, model = ...)`.
 #'
 #' Fits a [block_model()] by EM with the same steps as [gibbs()]. Gibbs and EM share the
 #' full conditionals of the model: a step that a sampler uses to **draw** a parameter is used by EM to
@@ -76,7 +78,7 @@
 #'   squared scores are quartic in an exact variable, so three Gauss–Hermite points per exact
 #'   variable are used (n points are exact to degree 2n - 1; DLMF Sec. 3.5(v)).
 #'
-#' @param model A [block_model()].
+#' @param data A [block_model()].
 #' @param steps Steps, as for [gibbs()] (the same list can be used for both); by default
 #'   Gibbs (conditional maximization) where possible and MALA (gradient) otherwise.
 #' @param latent Parameters integrated out in the E-step (one to three `[person]` parameters with a
@@ -153,13 +155,16 @@
 #' fit
 #' algorithm(fit)
 #' @export
-ecm.block_model <- function(model, steps = NULL, latent = NULL, nodes = NULL, prior = c("map", "ml"), init = NULL,
+ecm.block_model <- function(data, steps = NULL, latent = NULL, nodes = NULL, prior = c("map", "ml"), init = NULL,
                             cycles = 6, max_iter = 1000, tol = 1e-10, se = TRUE, analytic = TRUE, quadrature = c("adaptive", "ba81"), ...) {
+  model <- data
   if (length(list(...))) warning("unused arguments: ", paste(names(list(...)), collapse = ", "), call. = FALSE)
   bm_fit(model, steps, latent, nodes, match.arg(prior), init, cycles, max_iter, tol, se, analytic, match.arg(quadrature), "ecm")
 }
 
-#' Direct maximization for a declared model
+#' Direct maximization for a declared model (deprecated)
+#'
+#' **Deprecated** with [block_model()]: use the built-in models, `ecm(data, model = ...)`.
 #'
 #' Maximizes the objective of [ecm.block_model()] (the marginal log-likelihood, or the log posterior
 #' with `prior = "map"`) directly with [stats::nlminb()] (within the bounds of the parameters), all
@@ -171,6 +176,7 @@ ecm.block_model <- function(model, steps = NULL, latent = NULL, nodes = NULL, pr
 #' standard error, with a warning); ECM never lowers the objective and its iterations are cheap,
 #' Newton needs few iterations.
 #' @inheritParams ecm.block_model
+#' @param model A [block_model()].
 #' @param method `"newton"` (Hessian by Louis' formula) or `"quasi-newton"`.
 #' @return As [ecm.block_model()].
 #' @references Glas, C. A. W., & van der Linden, W. J. (2010). Marginal likelihood inference for a
@@ -186,6 +192,7 @@ mml.default <- function(model, ...) stop("mml() maximizes declared models direct
 #' @export
 mml.block_model <- function(model, latent = NULL, nodes = NULL, prior = c("map", "ml"), init = NULL, cycles = 6, max_iter = 1000,
                             tol = 1e-9, se = TRUE, analytic = TRUE, quadrature = c("adaptive", "ba81"), method = c("newton", "quasi-newton"), ...) {
+  deprecate_warn("mml()", "ecm(data, model = ...)")
   if (length(list(...))) warning("unused arguments: ", paste(names(list(...)), collapse = ", "), call. = FALSE)
   bm_fit(model, NULL, latent, nodes, match.arg(prior), init, cycles, max_iter, tol, se, analytic, match.arg(quadrature), match.arg(method))
 }

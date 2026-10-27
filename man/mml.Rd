@@ -3,7 +3,7 @@
 \name{mml}
 \alias{mml}
 \alias{mml.block_model}
-\title{Direct maximization for a declared model}
+\title{Direct maximization for a declared model (deprecated)}
 \usage{
 mml(model, ...)
 
@@ -64,6 +64,9 @@ only the numerical integration of the E-step changes, the conditional maximizati
 As \code{\link[=ecm.block_model]{ecm.block_model()}}.
 }
 \description{
+\strong{Deprecated} with \code{\link[=block_model]{block_model()}}: use the built-in models, \code{ecm(data, model = ...)}.
+}
+\details{
 Maximizes the objective of \code{\link[=ecm.block_model]{ecm.block_model()}} (the marginal log-likelihood, or the log posterior
 with \code{prior = "map"}) directly with \code{\link[stats:nlminb]{stats::nlminb()}} (within the bounds of the parameters), all
 parameters together, with the gradient from Fisher's identity and, for \code{method = "newton"}, the

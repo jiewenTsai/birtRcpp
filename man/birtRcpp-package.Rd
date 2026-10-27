@@ -21,6 +21,15 @@ The generics shared with birt (\code{estimates}, \code{scores}, \code{reliabilit
 \code{convergence}, \code{score_test}, \code{algorithm}) dispatch to the methods of both packages whichever was attached last: when
 both are loaded, each package's methods are registered in the other's generics.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/jiewenTsai/birtRcpp}
+  \item \url{https://github.com/jiewenTsai/birtExamples}
+  \item Report bugs at \url{https://github.com/jiewenTsai/birtRcpp/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Jie-Wen Tsai \email{tsai.jiewen@gmail.com}
 

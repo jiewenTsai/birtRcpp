@@ -109,13 +109,13 @@ get_corr <- function(est, true) stats::cor(est, true)
 run_simulation <- function(cond, para, model = sim_models, quantile = NULL, pars = c("a", "b", "ability"),
                            type = "norm", speed_var = c("free", "fixed"), ...) {
   model <- match.arg(model); speed_var <- match.arg(speed_var)
-  ctor <- switch(model, cross = function(d) rtirt_cross(d, quantile, speed_var = speed_var, cond = cond),
-                 latent = function(d) rtirt_latent(d, quantile, cond = cond),
-                 latreg = function(d) rtirt_latreg(d, speed_var = speed_var, cond = cond),
-                 null = function(d) rtirt_null(d, speed_var = speed_var, cond = cond), mlirt = function(d) mlirt(d, cond = cond))
+  ctor <- switch(model, cross = function(d) new_model("rtirt_cross", d, cond, quantile = quantile, speed_var = speed_var),
+                 latent = function(d) new_model("rtirt_latent", d, cond, quantile = quantile),
+                 latreg = function(d) new_model("rtirt_latreg", d, cond, speed_var = speed_var),
+                 null = function(d) new_model("rtirt_null", d, cond, speed_var = speed_var), mlirt = function(d) new_model("mlirt", d, cond))
   out <- lapply(seq_len(cond$n_rep), function(r) {
     d <- sim_data(cond, para, model, type)
-    fit <- gibbs(ctor(d), verbose = FALSE, ...)
+    fit <- gibbs_rtirt(ctor(d), verbose = FALSE, ...)
     cbind(rep = r, do.call(rbind, lapply(pars, function(p) compare_para(fit, p))))
   })
   do.call(rbind, out)

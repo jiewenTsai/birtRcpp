@@ -1,7 +1,7 @@
 # Summary objects: tables computed once, printed in the layout of tppcm::irt_pars() and
 # blavaan --------------------------------------------------------------------------------
 #
-# summary(fit) returns an "rtirt_summary": header lines and titled tables (data frames of
+# summary(fit) returns an "rtirt_summary": header lines and titled tables (tibbles of
 # class "rtirt_table"): fit, items and se (one row per item), parameters (one row per
 # parameter, blocks a / b / lambda / sigma2t / rho / structural, with the prior of each for
 # Gibbs fits), covariance and reliability. s$items etc. extract them, as.data.frame(s) gives
@@ -9,8 +9,8 @@
 
 rtable <- function(df, title, cls = NULL) {
   if (is.null(df)) return(NULL)
-  rownames(df) <- NULL
-  structure(df, class = c(cls, "rtirt_table", "data.frame"), title = title)
+  table <- tibble::as_tibble(as.data.frame(df))
+  structure(table, class = c(cls, "rtirt_table", class(table)), title = title)
 }
 
 #' Summary tables
@@ -19,7 +19,7 @@ rtable <- function(df, title, cls = NULL) {
 #' object: `header`, `fit` (fit indices), `items` and `se` (one row per item: a, b, lambda,
 #' sigma2t, rho and their posterior SDs or standard errors), `parameters` (one row per
 #' parameter with its interval and, for Gibbs fits, its prior, as in blavaan), `covariance`
-#' (person covariance) and `reliability`. Each element is a data frame; `as.data.frame()`
+#' (person covariance) and `reliability`. Each element is a tibble; `as.data.frame()`
 #' returns `parameters`. `print()` shows the tables under their names, so `s$items` gets the
 #' one printed as `$items`.
 #' @param x An `rtirt_summary`, or one of its tables.

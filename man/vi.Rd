@@ -2,7 +2,7 @@
 % Please edit documentation in R/model_vi.R
 \name{vi}
 \alias{vi}
-\title{Variational Bayes}
+\title{Variational Bayes (deprecated)}
 \usage{
 vi(model, ...)
 }
@@ -12,5 +12,9 @@ vi(model, ...)
 \item{...}{Passed to the method.}
 }
 \description{
+\strong{Deprecated}: \code{vi()} still works (with a warning once per session) but gets no new
+features. Use \code{\link[=ecm]{ecm()}} for estimates or \code{\link[=gibbs]{gibbs()}} for the posterior.
+}
+\details{
 \code{vi()} fits a model by mean-field variational Bayes (CAVI); see \code{\link[=vi.block_model]{vi.block_model()}}.
 }

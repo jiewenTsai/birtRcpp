@@ -7,7 +7,10 @@
 # latent such as speed is integrated exactly given the others), so vi() and ecm() share
 # the E-step; with every other q a point mass vi() is ecm().
 
-#' Variational Bayes
+#' Variational Bayes (deprecated)
+#'
+#' **Deprecated**: `vi()` still works (with a warning once per session) but gets no new
+#' features. Use [ecm()] for estimates or [gibbs()] for the posterior.
 #'
 #' `vi()` fits a model by mean-field variational Bayes (CAVI); see [vi.block_model()].
 #' @param model A [block_model()].
@@ -79,6 +82,7 @@ vi.default <- function(model, ...) stop("vi() fits declared models: model must c
 #' @export
 vi.block_model <- function(model, steps = NULL, latent = NULL, nodes = NULL, init = NULL, cycles = 6, max_iter = 1000, tol = 1e-9,
                       verbose = FALSE, quadrature = c("adaptive", "ba81"), ...) {
+  deprecate_warn("vi()", "ecm(data, model = ...) for estimates or gibbs(data, model = ...) for the posterior")
   if (length(list(...))) warning("unused arguments: ", paste(names(list(...)), collapse = ", "), call. = FALSE)
   t0 <- Sys.time(); quadrature <- match.arg(quadrature)
   E <- vb_setup(bm_setup(model, steps, latent, nodes, "map", init, TRUE, quadrature, from_data = FALSE))   # CAVI from the prior means: the ELBO rises from the first sweep
@@ -359,7 +363,9 @@ print.block_model_vi <- function(x, ...) {
   invisible(x)
 }
 
-#' Check a CAVI fit
+#' Check a CAVI fit (deprecated)
+#'
+#' **Deprecated** with [vi()].
 #'
 #' The CAVI counterpart of [check_ecm()] and the Geweke check: coordinate ascent is right when
 #'
@@ -375,6 +381,7 @@ print.block_model_vi <- function(x, ...) {
 #' @return A data frame with one row per check (class `em_check`, printed like [check_ecm()]).
 #' @export
 check_vi <- function(model, steps = NULL, latent = NULL, nodes = NULL, n_start = 5, sweeps = 20, seed = NULL, quadrature = c("adaptive", "ba81")) {
+  deprecate_warn("check_vi()", "check_ecm() or check_sampler()")
   if (!is.null(seed)) set.seed(seed)
   quadrature <- match.arg(quadrature)
   E <- vb_setup(bm_setup(model, steps, latent, nodes, "map", NULL, TRUE, quadrature))

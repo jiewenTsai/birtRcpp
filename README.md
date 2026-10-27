@@ -3,12 +3,11 @@
 **BIvariate Response Time Modeling with 'Rcpp'**
 
 birtRcpp fits joint models of item responses and response times in R, from their full conditionals.
-Choose a built-in model (2PL with log-normal response times, latent regressions of ability and
-speed, cross-relations of ability with each response time, and their quantile versions) or declare
-your own with `block_model()`. The main estimator is `ecm()`: maximum marginal likelihood by ECM,
-with standard errors, AIC and BIC, usually in about a second. The same conditional steps drive the
-Gibbs sampler `gibbs()` and the variational engine `vi()`, and every draw runs in C++
-(RcppArmadillo). The built-in models port the Julia package ExtendedRtIrtModeling.jl with corrected
+Name a built-in model (2PL with log-normal response times, latent regressions of ability and
+speed, cross-relations of ability with each response time, and their quantile versions), as in
+mirt: `ecm(dat, model = "cross")`. The main estimator is `ecm()`: maximum marginal likelihood by
+ECM, with standard errors, AIC and BIC, usually in about a second. The same conditional steps drive
+the Gibbs sampler `gibbs()`, and every draw runs in C++ (RcppArmadillo). The built-in models port the Julia package ExtendedRtIrtModeling.jl with corrected
 full conditionals; the Julia function names are kept as aliases.
 
 中文版（完整說明）：[README.zh-TW.md](README.zh-TW.md)
@@ -25,7 +24,7 @@ A C++ compiler means Rtools on Windows and the Xcode command line tools on macOS
 
 ## Quick start
 
-Four steps: `input_data()`, a model, `ecm()`, and the tables.
+Three steps: `input_data()`, `ecm()` with the model named, and the tables.
 
 ```r
 library(birtRcpp)
@@ -36,7 +35,7 @@ raw  <- data.frame(id = sprintf("P%03d", 1:500), sim$Y, sim$T)  # a data frame a
 names(raw) <- c("id", paste0("q", 1:10), paste0("q", 1:10, "_sec"))
 
 dat <- input_data(resp = paste0("q", 1:10), time = paste0("q", 1:10, "_sec"), id = "id", data = raw)
-fit <- ecm(rtirt_cross(dat))     # logit P(y = 1) = a(θ − b);  log t = λ − ζ − ρθ + ε
+fit <- ecm(dat, model = "cross")   # logit P(y = 1) = a(θ − b);  log t = λ − ζ − ρθ + ε
 fit
 ```
 
@@ -46,7 +45,7 @@ rtirt_cross
   maximum marginal likelihood (ECM, 41 Gauss-Hermite nodes): 14 iterations, 0.8 s
   logLik -8309.032, npar 51, AIC 16720.1, BIC 16935.0
   Reliability: ability 0.746, speed 0.975
-Use summary(), coef(), scores(), estimates(), fit_indices(); gibbs(fit, init = "ecm") to sample from here.
+Use summary(), coef(), scores(), estimates(), fit_indices(); gibbs(data, model = ..., init = fit) to sample from here.
 ```
 
 ```r
@@ -84,16 +83,17 @@ coding (0/1), missing values, logged times and uncentred covariates, and says wh
 ### 1. ECM first, then Gibbs from the ECM solution
 
 `ecm()` gives estimates, standard errors, `logLik()`, `AIC()`, `BIC()` and likelihood-ratio tests.
-`gibbs(fit, init = "ecm")` starts the chains at that solution, so a short burn-in is enough.
+`gibbs(dat, model = "cross", init = fit)` starts the chains at that solution, so a short burn-in
+is enough.
 
 ```r
-f0 <- ecm(rtirt_null(dat))                       # nested: equal rho for every item
+f0 <- ecm(dat, model = "null")                   # nested: equal rho for every item
 lr <- 2 * (logLik(fit) - logLik(f0)); df <- fit$ecm$npar - f0$ecm$npar
 c(LR = lr, df = df, p = pchisq(lr, df, lower.tail = FALSE))
 #>           LR           df            p 
 #> 2.981960e+02 9.000000e+00 6.299468e-59 
 
-g <- gibbs(fit, n_iter = 2000, n_chain = 3, init = "ecm", seed = 1)
+g <- gibbs(dat, model = "cross", init = fit, n_iter = 2000, n_chain = 3, seed = 1)
 g
 ```
 
@@ -195,7 +195,7 @@ sampler can be composed in R with the same functions (`?blocks`, `inst/examples/
 likelihood; Gibbs only). A vector of levels fits one model per level.
 
 ```r
-qs <- gibbs(rtirt_cross(dat, quantile = c(0.1, 0.5, 0.9)), n_iter = 2000, n_chain = 2, seed = 2)
+qs <- gibbs(dat, model = "cross", quantile = c(0.1, 0.5, 0.9), n_iter = 2000, n_chain = 2, seed = 2)
 qs
 ```
 
@@ -220,7 +220,11 @@ plot(qs)              # rho of each item against the quantile level, with 95% in
 
 ![cross-relations against the quantile level](man/figures/README-quantiles.png)
 
-### 4. Declare your own model: one declaration, three engines, three checks
+### 4. Declare your own model (deprecated)
+
+> **Deprecated.** `block_model()`, its steps (`step_gibbs()`, `step_mala()`, `step_shift()`),
+> `vi()` and `mml()` still work, with a warning once per session, but get no new features. New
+> models are added to the built-in menu of `ecm()` and `gibbs()` instead.
 
 `block_model()` declares a model in the style of JAGS or PyMC. A list of steps names the blocks;
 the same model and steps go to `ecm()` (conditional maximization), `gibbs()` (conditional draws)
@@ -356,8 +360,8 @@ into strucchange or partykit.
 
 ```r
 rtirt_priors(a = c(mean = 1, sd = 0.5), rho = c(sd = 0.3))        # the Prior column of summary() shows them
-ecm(rtirt_cross(dat), prior = "map", priors = rtirt_priors(a = c(1, 0.5)))   # posterior mode in the item parameters
-gibbs(fit, init = "ecm", collapse = TRUE)                           # partially collapsed Gibbs: same posterior, higher ESS
+ecm(dat, model = "cross", prior = "map", priors = rtirt_priors(a = c(1, 0.5)))   # posterior mode in the item parameters
+gibbs(dat, model = "cross", init = fit, control = gibbs_control(collapse = TRUE))  # partially collapsed Gibbs: same posterior, higher ESS
 ```
 
 ```
@@ -379,15 +383,22 @@ with the same number of iterations.
 
 ## Built-in models
 
-| constructor | model |
+| `model =` | model |
 |---|---|
-| `mlirt(dat)` | 2PL (or 1PL) with a latent regression of ability |
-| `rtirt_null(dat)` | 2PL + log-normal response times, ability and speed correlated (van der Linden, 2007) |
-| `rtirt_latreg(dat)` | ... with latent regressions of ability and speed on covariates |
-| `rtirt_latent(dat)` | speed regressed on ability and covariates; `quantile =` for quantile regression |
-| `rtirt_cross(dat)` | a cross-relation of ability with each log response time; `quantile =` |
+| `"irt"` | 2PL (or 1PL); with covariates, a latent regression of ability |
+| `"null"` | 2PL + log-normal response times, ability and speed correlated (van der Linden, 2007) |
+| `"latreg"` | ... with latent regressions of ability and speed on covariates |
+| `"latent"` | speed regressed on ability and covariates; `quantile =` for quantile regression |
+| `"cross"` | a cross-relation of ability with each log response time; `quantile =` |
+| `"mixture"` | the mixture model of Wang and Xu (2015); planned, not available yet |
 
-All five are fitted by `ecm()` or `gibbs()`; the quantile versions by `gibbs()` only. The
+All are fitted by `ecm(dat, model = ...)` or `gibbs(dat, model = ...)`; the quantile versions by
+`gibbs()` only. The details are arguments: `itemtype` (`"2pl"`, `"1pl"`; `"grm"` planned),
+`speed_var`, `quantile`, `cov`; the rarely changed engine settings go in `ecm_control()` and
+`gibbs_control()`. Tables (`estimates()`, `scores()`, the tables of `summary()`) are tibbles.
+The old constructors (`mlirt()`, `rtirt_null()`, `rtirt_latreg()`, `rtirt_latent()`,
+`rtirt_cross()`) and `gibbs(fit, init = "ecm")` still work, with a deprecation warning; the
+Julia aliases (`GibbsRtIrtCross()`, ...) are kept as they were. The
 accessors `summary()`, `coef()`, `estimates()`, `scores()`, `reliability()`, `convergence()`,
 `fit_indices()` and `plot()` work on both kinds of fit.
 

@@ -4,10 +4,10 @@
 \alias{gibbs.block_model}
 \alias{algorithm.block_model}
 \alias{algorithm.block_model_fit}
-\title{Sample a declared model with stacked steps}
+\title{Sample a declared model with stacked steps (deprecated)}
 \usage{
 \method{gibbs}{block_model}(
-  model,
+  data,
   steps = NULL,
   n_iter = 2000,
   n_burnin = floor(n_iter/2),
@@ -24,7 +24,7 @@
 \method{algorithm}{block_model_fit}(object, format = c("unicode", "latex"), ...)
 }
 \arguments{
-\item{model}{A \code{\link[=block_model]{block_model()}}.}
+\item{data}{A \code{\link[=block_model]{block_model()}}.}
 
 \item{steps}{A list of steps, e.g. \code{list(step_mala(theta), step_gibbs(a, b))}.}
 
@@ -49,6 +49,9 @@ A \code{block_fit} (see \code{\link[=run_sampler]{run_sampler()}}) with the mode
 the steps with their full conditionals.
 }
 \description{
+\strong{Deprecated} with \code{\link[=block_model]{block_model()}}: use the built-in models, \code{gibbs(data, model = ...)}.
+}
+\details{
 Runs the steps once per iteration in the order given (see \link{block_steps}) with \code{\link[=run_sampler]{run_sampler()}}
 (chains, burn-in, storage, summary). Without \code{steps}, every parameter that has a Gibbs step gets
 one (in the order of the declarations) and the others get MALA.

@@ -24,9 +24,9 @@ URL: https://github.com/jiewenTsai/birtRcpp, https://github.com/jiewenTsai/birtE
 BugReports: https://github.com/jiewenTsai/birtRcpp/issues
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
-Imports: Rcpp (>= 1.0.10), coda, stats, statmod, utils, graphics, grDevices
+Imports: Rcpp (>= 1.0.10), coda, stats, statmod, tibble, utils, graphics, grDevices
 LinkingTo: Rcpp, RcppArmadillo
-Suggests: testthat (>= 3.1.7), knitr, rmarkdown, loo, strucchange, sandwich, posterior, LNIRT
+Suggests: testthat (>= 3.1.7), withr, knitr, rmarkdown, loo, strucchange, sandwich, posterior, LNIRT
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
