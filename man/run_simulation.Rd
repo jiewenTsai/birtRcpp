@@ -32,6 +32,9 @@ run_simulation(
 
 \item{...}{Passed to \code{\link[=gibbs]{gibbs()}}.}
 }
+\value{
+A tibble with one row per replication and parameter block.
+}
 \description{
 As \code{runSimulation()} in Julia: \code{cond$n_rep} replications with fixed item parameters and new
 persons (and data) in each replication; returns bias, RMSE and correlation per parameter
