@@ -48,7 +48,9 @@ check_itemtype <- function(itemtype, n_item) {
 select_cov <- function(data, type, cov) {
   uses_cov <- .model_info[[type]]$X
   if (!uses_cov) {
-    if (!is.null(cov)) warning("this model has no covariates; cov is ignored", call. = FALSE)
+    if (!is.null(cov)) {
+      warning("this model has no covariates; cov is ignored", call. = FALSE)
+    }
     data$X <- NULL
     return(data)
   }
@@ -127,8 +129,10 @@ ecm.input_data <- function(data, model = NULL, itemtype = "2pl", speed_var = c("
 # an ecm() fit as the start of gibbs(): it must be the same data and model
 attach_ecm <- function(object, fit) {
   same_model <- identical(class(fit)[1], class(object)[1])
-  same_data <- identical(fit$data$Y, object$data$Y) && identical(fit$data$log_t, object$data$log_t) &&
-    identical(fit$data$X, object$data$X)
+  same_resp <- identical(fit$data$Y, object$data$Y)
+  same_times <- identical(fit$data$log_t, object$data$log_t)
+  same_cov <- identical(fit$data$X, object$data$X)
+  same_data <- same_resp && same_times && same_cov
   key <- c("speed_var", "itemtype")
   same_settings <- identical(fit$settings[key], object$settings[key])
   if (!same_model || !same_data || !same_settings) {
@@ -146,16 +150,19 @@ gibbs.input_data <- function(data, model = NULL, itemtype = "2pl", speed_var = c
   speed_var <- match.arg(speed_var)
   object <- build_model(data, model, itemtype, speed_var, cov, quantile, intercept)
   if (inherits(init, "rtirt")) {
-    if (!has_em(init)) stop("init must be an ecm() fit, \"random\" or \"ecm\"", call. = FALSE)
-    if (inherits(object, "rtirt_qset")) stop("quantile models start from random values", call. = FALSE)
+    if (!has_em(init)) {
+      stop("init must be an ecm() fit, \"random\" or \"ecm\"", call. = FALSE)
+    }
+    if (inherits(object, "rtirt_qset")) {
+      stop("quantile models start from random values", call. = FALSE)
+    }
     object <- attach_ecm(object, init)
     init <- "ecm"
   }
   settings <- list(n_iter = n_iter, n_chain = n_chain, n_burnin = control$n_burnin, n_thin = control$n_thin,
                    verbose = control$verbose, fit_indices = control$fit_indices, init = init,
                    priors = priors, collapse = control$collapse)
-  if (inherits(object, "rtirt_qset")) {
-    return(do.call(gibbs.rtirt_qset, c(list(object, seed = seed), settings, list(...))))
-  }
-  do.call(gibbs_rtirt, c(list(object, seed = seed), settings, list(...)))
+  args <- c(list(object, seed = seed), settings, list(...))
+  sampler <- if (inherits(object, "rtirt_qset")) gibbs.rtirt_qset else gibbs_rtirt
+  do.call(sampler, args)
 }
