@@ -111,172 +111,289 @@ check_sampler <- function(model = NULL, method = c("geweke", "sbc"), n_persons =
                           step = NULL, prior = NULL, simulate = NULL, ...) {
   method <- match.arg(method)
   if (!is.null(step)) {
-    if (!is.function(prior) || !is.function(simulate) || !length(monitor))
+    if (!is.function(prior) || !is.function(simulate) || !length(monitor)) {
       stop("a sampler written by the user is checked with step, prior, simulate and monitor", call. = FALSE)
-    if (method != "geweke") stop("samplers written by the user are checked with method = \"geweke\"", call. = FALSE)
-    return(check_step(step, prior, simulate, monitor, n_iter %||% 2e4, if (missing(n_prior)) 4000 else n_prior, probs, seed %||% 1))
+    }
+    if (method != "geweke") {
+      stop("samplers written by the user are checked with method = \"geweke\"", call. = FALSE)
+    }
+    user_prior_draws <- if (missing(n_prior)) 4000 else n_prior
+    return(check_step(step, prior, simulate, monitor, n_iter %||% 2e4, user_prior_draws, probs, seed %||% 1))
   }
-  if (is.null(model)) stop("give a model, or a sampler (step, prior, simulate, monitor)", call. = FALSE)
+  if (is.null(model)) {
+    stop("give a model, or a sampler (step, prior, simulate, monitor)", call. = FALSE)
+  }
   if (inherits(model, "block_model")) {
-    if (method != "geweke") stop("declared models are checked with method = \"geweke\"", call. = FALSE)
-    if (!is.null(seed)) set.seed(seed)
+    if (method != "geweke") {
+      stop("declared models are checked with method = \"geweke\"", call. = FALSE)
+    }
+    if (!is.null(seed)) {
+      set.seed(seed)
+    }
     return(check_model_steps(model, steps, n_iter %||% 2e4, probs, min(n_prior, 1e4), monitor))
   }
-  if (inherits(model, "rtirt_qset")) model <- model$models[[1]]
-  if (!inherits(model, "rtirt")) stop("model must be a model object, e.g. rtirt_cross(data)", call. = FALSE)
-  for (p in list(priors, sampler_priors)) if (!inherits(p, "rtirt_priors")) stop("priors must come from rtirt_priors()", call. = FALSE)
-  if (is.null(priors$lambda) || is.null(sampler_priors$lambda))
+  if (inherits(model, "rtirt_qset")) {
+    model <- model$models[[1]]
+  }
+  check_check_inputs(model, priors, sampler_priors)
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+  collapse <- collapse %||% isTRUE(model$post$settings$collapse)
+  S <- ck_setup(model, n_persons, collapse, itemtype, priors, sampler_priors)
+  result <- if (method == "geweke") {
+    ck_geweke(S, n_iter %||% 2e5, probs, n_prior)
+  } else {
+    ck_sbc(S, n_iter %||% 1e4, n_rep, n_draws)
+  }
+  quantile_text <- if (S$qr) sprintf(" (q = %s)", S$q) else ""
+  attr(result, "setting") <- sprintf("%s%s, %d persons x %d items, collapse = %s", class(model)[1], quantile_text,
+                                     S$N, S$K, S$collapse)
+  result
+}
+
+check_check_inputs <- function(model, priors, sampler_priors) {
+  if (!inherits(model, "rtirt")) {
+    stop("model must be a model object, e.g. rtirt_cross(data)", call. = FALSE)
+  }
+  for (p in list(priors, sampler_priors)) {
+    if (!inherits(p, "rtirt_priors")) {
+      stop("priors must come from rtirt_priors()", call. = FALSE)
+    }
+  }
+  if (is.null(priors$lambda) || is.null(sampler_priors$lambda)) {
     stop("the check needs priors that do not depend on the data; rtirt_priors_julia() centres lambda on the log times", call. = FALSE)
-  if (!is.null(seed)) set.seed(seed)
-  S <- ck_setup(model, n_persons, collapse %||% isTRUE(model$post$settings$collapse), itemtype, priors, sampler_priors)
-  out <- if (method == "geweke") ck_geweke(S, n_iter %||% 2e5, probs, n_prior) else ck_sbc(S, n_iter %||% 1e4, n_rep, n_draws)
-  attr(out, "setting") <- sprintf("%s%s, %d persons x %d items, collapse = %s", class(model)[1], if (S$qr) sprintf(" (q = %s)", S$q) else "",
-                                  S$N, S$K, S$collapse)
-  out
+  }
 }
 
 #' @rdname check_sampler
 #' @export
 print.rtirt_check <- function(x, n = 10, ...) {
-  m <- attr(x, "method")
-  if (is.null(m)) { print.data.frame(x, ...); return(invisible(x)) }       # a subset of the table
-  cat(if (m == "geweke") "Geweke (2004) joint distribution test" else "Simulation-based calibration (Talts et al., 2018)", "\n")
+  method <- attr(x, "method")
+  if (is.null(method)) {                                # a subset of the table
+    print.data.frame(x, ...)
+    return(invisible(x))
+  }
+  title <- if (method == "geweke") "Geweke (2004) joint distribution test" else "Simulation-based calibration (Talts et al., 2018)"
+  cat(title, "\n")
   cat(" ", attr(x, "setting"), "\n ", attr(x, "detail"), "\n", sep = "")
-  o <- x[order(x$p.holm, x$p.value), , drop = FALSE]
-  cat(sprintf("  %d comparisons; smallest Holm-adjusted p = %.3g: %s\n\n", nrow(x), min(x$p.holm),
-              if (attr(x, "passed")) "no evidence against the sampler" else "the sampler does NOT match the prior and likelihood"))
-  print.data.frame(utils::head(o, n), row.names = FALSE, digits = 3)
-  if (m == "geweke" && isTRUE(min(x$ess, na.rm = TRUE) < 400))
-    cat(sprintf("\n  Note: the smallest effective sample size is %d; with fewer than about 400 the z-tests are unreliable,\n  so raise n_iter (or narrow the priors of the slow parameters, the check holds for any proper prior).\n", min(x$ess, na.rm = TRUE)))
+  ordered <- x[order(x$p.holm, x$p.value), , drop = FALSE]
+  verdict <- if (attr(x, "passed")) "no evidence against the sampler" else "the sampler does NOT match the prior and likelihood"
+  cat(sprintf("  %d comparisons; smallest Holm-adjusted p = %.3g: %s\n\n", nrow(x), min(x$p.holm), verdict))
+  print.data.frame(utils::head(ordered, n), row.names = FALSE, digits = 3)
+  if (method == "geweke" && isTRUE(min(x$ess, na.rm = TRUE) < 400)) {
+    min_ess <- min(x$ess, na.rm = TRUE)
+    cat(sprintf("\n  Note: the smallest effective sample size is %d; with fewer than about 400 the z-tests are unreliable,\n  so raise n_iter (or narrow the priors of the slow parameters, the check holds for any proper prior).\n", min_ess))
+  }
   invisible(x)
 }
 
 # ---- setup: model template, design and the sampler call ----------------------------------------------
 ck_setup <- function(model, N, collapse, itemtype, priors, sampler_priors) {
-  info <- .model_info[[class(model)[1]]]; St <- model$settings; D <- model$data; eng <- info$engine
-  one_pl <- identical(itemtype %||% St$itemtype, "1pl")
-  X <- if (info$X) {
-    if (nrow(D$X) < N) stop(sprintf("the model has %d persons; n_persons must not exceed it", nrow(D$X)), call. = FALSE)
-    X0 <- D$X[seq_len(N), , drop = FALSE]
-    if (isTRUE(St$intercept)) cbind(`(Intercept)` = 1, X0) else X0
-  } else matrix(0, N, 0)
+  info <- .model_info[[class(model)[1]]]
+  settings <- model$settings
+  data <- model$data
+  engine <- info$engine
+  one_pl <- identical(itemtype %||% settings$itemtype, "1pl")
+  X <- ck_design(info, data, N, settings)
   qr <- isTRUE(model$qr)
-  list(eng = eng, rt = info$rt, qr = qr, q = if (qr) model$q else 0.5, one_pl = one_pl, collapse = collapse,
-       fixed = St$speed_var == "fixed" && eng %in% c("rtirt", "cross"), X = X, P = ncol(X), N = N, K = ncol(D$Y),
-       items = D$items, pr = priors, pv = prior_vector(sampler_priors),
-       names = par_names(eng, D$items, colnames(X) %||% character()))
+  list(eng = engine, rt = info$rt, qr = qr, q = if (qr) model$q else 0.5, one_pl = one_pl, collapse = collapse,
+       fixed = settings$speed_var == "fixed" && engine %in% c("rtirt", "cross"), X = X, P = ncol(X), N = N, K = ncol(data$Y),
+       items = data$items, pr = priors, pv = prior_vector(sampler_priors),
+       names = par_names(engine, data$items, colnames(X) %||% character()))
+}
+
+# covariates of the first N persons (and the intercept column of the model)
+ck_design <- function(info, data, N, settings) {
+  if (!info$X) {
+    return(matrix(0, N, 0))
+  }
+  if (nrow(data$X) < N) {
+    stop(sprintf("the model has %d persons; n_persons must not exceed it", nrow(data$X)), call. = FALSE)
+  }
+  X <- data$X[seq_len(N), , drop = FALSE]
+  if (isTRUE(settings$intercept)) {
+    X <- cbind(`(Intercept)` = 1, X)
+  }
+  X
 }
 
 ck_run <- function(S, Y, L, init, n_iter, n_burn) {
-  aj <- S$collapse && !S$one_pl
+  ab_joint <- S$collapse && !S$one_pl
   switch(S$eng,
-    mlirt  = .gibbs_mlirt(Y, S$X, S$one_pl, S$collapse, aj, n_iter, n_burn, init, S$pv),
-    rtirt  = .gibbs_rtirt(Y, L, S$X, S$fixed, S$one_pl, S$collapse, aj, n_iter, n_burn, init, S$pv),
-    latent = .gibbs_latent(Y, L, S$X, S$qr, S$q, S$one_pl, S$collapse, aj, n_iter, n_burn, init, S$pv),
-    cross  = .gibbs_cross(Y, L, S$qr, S$q, S$fixed, S$one_pl, S$collapse, aj, n_iter, n_burn, init, S$pv))
+    mlirt  = .gibbs_mlirt(Y, S$X, S$one_pl, S$collapse, ab_joint, n_iter, n_burn, init, S$pv),
+    rtirt  = .gibbs_rtirt(Y, L, S$X, S$fixed, S$one_pl, S$collapse, ab_joint, n_iter, n_burn, init, S$pv),
+    latent = .gibbs_latent(Y, L, S$X, S$qr, S$q, S$one_pl, S$collapse, ab_joint, n_iter, n_burn, init, S$pv),
+    cross  = .gibbs_cross(Y, L, S$qr, S$q, S$fixed, S$one_pl, S$collapse, ab_joint, n_iter, n_burn, init, S$pv))
 }
 
 # draws of n variances (or ALD scales) from their prior: half-t on the square root, or inverse gamma
-ck_rvar <- function(n, x, fam) if (fam == "half-t") (abs(stats::rt(n, x[["df"]])) * x[["scale"]])^2 else 1 / stats::rgamma(n, x[["shape"]], rate = x[["scale"]])
+ck_rvar <- function(n, x, fam) {
+  if (fam == "half-t") {
+    return((abs(stats::rt(n, x[["df"]])) * x[["scale"]])^2)
+  }
+  1 / stats::rgamma(n, x[["shape"]], rate = x[["scale"]])
+}
 
 # M draws of the item and structural parameters from the prior, in the state layout of the samplers
 ck_prior <- function(S, M) {
-  pr <- S$pr; K <- S$K; P <- S$P
-  tn <- function(n, m, s, lo, hi) matrix(draw_tnorm(rep(m, n), s, lo, hi), ncol = K)
-  st <- list(a = if (S$one_pl) matrix(1, M, K) else tn(M * K, pr$a[1], pr$a[2], 0, Inf),
-             b = tn(M * K, pr$b[["mean"]], pr$b[["sd"]], pr$b[["lower"]], pr$b[["upper"]]))
+  pr <- S$pr
+  K <- S$K
+  P <- S$P
+  truncated <- function(n, m, s, lo, hi) matrix(draw_tnorm(rep(m, n), s, lo, hi), ncol = K)
+  normal <- function(k) matrix(stats::rnorm(M * k, 0, pr$beta[["sd"]]), M)
+  speed_var <- function() ck_rvar(M, pr$var_speed, pr$var_speed_family)
+
+  a <- if (S$one_pl) matrix(1, M, K) else truncated(M * K, pr$a[1], pr$a[2], 0, Inf)
+  b <- truncated(M * K, pr$b[["mean"]], pr$b[["sd"]], pr$b[["lower"]], pr$b[["upper"]])
+  state <- list(a = a, b = b)
   if (S$rt) {
-    st$lambda <- tn(M * K, pr$lambda[["mean"]], pr$lambda[["sd"]], pr$lambda[["lower"]], Inf)
-    st$sigma2 <- matrix(ck_rvar(M * K, pr$sigma2t, pr$sigma2t_family), M)
+    state$lambda <- truncated(M * K, pr$lambda[["mean"]], pr$lambda[["sd"]], pr$lambda[["lower"]], Inf)
+    state$sigma2 <- matrix(ck_rvar(M * K, pr$sigma2t, pr$sigma2t_family), M)
   }
-  nb <- function(k) matrix(stats::rnorm(M * k, 0, pr$beta[["sd"]]), M)
-  vs <- function() ck_rvar(M, pr$var_speed, pr$var_speed_family)
-  switch(S$eng,
-    mlirt = { st$beta <- nb(P) },
-    rtirt = { st$beta1 <- nb(P); st$beta2 <- nb(P)
-              if (S$fixed) { st$c <- stats::runif(M, -1, 1); st$v <- 1 - st$c^2 } else { st$c <- stats::rnorm(M, 0, pr$cov[["sd"]]); st$v <- vs() } },
-    latent = { st$beta <- nb(P + 1); st$s <- vs() },
-    cross = { st$rho <- matrix(stats::rnorm(M * K, 0, pr$rho[["sd"]]), M); st$s <- if (S$fixed) rep(1, M) else vs() })
-  st
+  if (S$eng == "mlirt") {
+    state$beta <- normal(P)
+  }
+  if (S$eng == "rtirt") {
+    state$beta1 <- normal(P)
+    state$beta2 <- normal(P)
+    if (S$fixed) {
+      state$c <- stats::runif(M, -1, 1)
+      state$v <- 1 - state$c^2
+    } else {
+      state$c <- stats::rnorm(M, 0, pr$cov[["sd"]])
+      state$v <- speed_var()
+    }
+  }
+  if (S$eng == "latent") {
+    state$beta <- normal(P + 1)
+    state$s <- speed_var()
+  }
+  if (S$eng == "cross") {
+    state$rho <- matrix(stats::rnorm(M * K, 0, pr$rho[["sd"]]), M)
+    state$s <- if (S$fixed) rep(1, M) else speed_var()
+  }
+  state
 }
 
 # the parameters as stored by the samplers (one row per draw)
 ck_stored <- function(S, st) {
-  m <- with(st, switch(S$eng,
-    mlirt = cbind(a, b, beta), cross = cbind(a, b, lambda, sigma2, rho, s), latent = cbind(a, b, lambda, sigma2, beta, s),
+  stored <- with(st, switch(S$eng,
+    mlirt = cbind(a, b, beta),
+    cross = cbind(a, b, lambda, sigma2, rho, s),
+    latent = cbind(a, b, lambda, sigma2, beta, s),
     rtirt = cbind(a, b, lambda, sigma2, beta1, beta2, c / sqrt(c^2 + v), c^2 + v)))
-  colnames(m) <- S$names
-  m
+  colnames(stored) <- S$names
+  stored
 }
 
 # one state of the sampler: parameters from the prior, persons given the parameters
-ck_state <- function(S) ck_persons(S, lapply(ck_prior(S, 1), function(x) if (is.matrix(x)) x[1, ] else x))
+# The prior draw is passed unevaluated on purpose: ck_persons() forces it at its first use of p,
+# which (as in earlier versions) comes after the first person draws for the models with response
+# times, so a seed gives the same check as before.
+ck_state <- function(S) {
+  ck_persons(S, lapply(ck_prior(S, 1), function(x) if (is.matrix(x)) x[1, ] else x))
+}
 
 # person values (ability, speed) drawn from their distribution given the parameters p
 ck_persons <- function(S, p) {
-  N <- S$N; X <- S$X; P <- S$P
+  N <- S$N
+  X <- S$X
+  P <- S$P
   xb <- function(b) if (P) drop(X %*% b) else rep(0, N)
-  k <- ald_k(S$q)
-  switch(S$eng,
-    mlirt = { p$theta <- xb(p$beta) + stats::rnorm(N) },
-    cross = { p$theta <- stats::rnorm(N); p$zeta <- stats::rnorm(N, 0, sqrt(p$s)) },
-    rtirt = { e1 <- stats::rnorm(N); p$theta <- xb(p$beta1) + e1; p$zeta <- xb(p$beta2) + p$c * e1 + stats::rnorm(N, 0, sqrt(p$v)) },
-    latent = { p$theta <- stats::rnorm(N)
-               u <- if (S$qr) { nu <- stats::rexp(N, 1 / p$s); k[1] * nu + sqrt(k[2] * p$s * nu) * stats::rnorm(N) } else stats::rnorm(N, 0, sqrt(p$s))
-               p$zeta <- xb(p$beta[seq_len(P)]) + p$beta[P + 1] * p$theta + u })
+  if (S$eng == "mlirt") {
+    p$theta <- xb(p$beta) + stats::rnorm(N)
+  }
+  if (S$eng == "cross") {
+    p$theta <- stats::rnorm(N)
+    p$zeta <- stats::rnorm(N, 0, sqrt(p$s))
+  }
+  if (S$eng == "rtirt") {
+    ability_resid <- stats::rnorm(N)
+    p$theta <- xb(p$beta1) + ability_resid
+    p$zeta <- xb(p$beta2) + p$c * ability_resid + stats::rnorm(N, 0, sqrt(p$v))
+  }
+  if (S$eng == "latent") {
+    p$theta <- stats::rnorm(N)
+    speed_resid <- if (S$qr) ald_draws(N, p$s, S$q) else stats::rnorm(N, 0, sqrt(p$s))
+    p$zeta <- xb(p$beta[seq_len(P)]) + p$beta[P + 1] * p$theta + speed_resid
+  }
   p
 }
-ald_k <- function(q) c((1 - 2 * q) / (q * (1 - q)), 2 / (q * (1 - q)))
+ald_k <- function(q) {
+  c((1 - 2 * q) / (q * (1 - q)), 2 / (q * (1 - q)))
+}
+
+# ALD residuals with scale s as a normal mixture: k1 nu + sqrt(k2 s nu) z, nu ~ Exp(mean s)
+ald_draws <- function(n, s, q) {
+  k <- ald_k(q)
+  nu <- stats::rexp(n, 1 / s)
+  k[1] * nu + sqrt(k[2] * s * nu) * stats::rnorm(n)
+}
 
 # data given the parameters and the person values
 ck_data <- function(S, st) {
-  N <- S$N; K <- S$K
+  N <- S$N
+  K <- S$K
   eta <- outer(st$theta, st$a) - matrix(st$a * st$b, N, K, byrow = TRUE)
   Y <- matrix(stats::rbinom(N * K, 1, stats::plogis(eta)), N)
-  L <- NULL
+  L <- matrix(0, N, K)
   if (S$rt) {
-    mu <- matrix(st$lambda, N, K, byrow = TRUE) - st$zeta - if (S$eng == "cross") outer(st$theta, st$rho) else 0
+    cross_effect <- if (S$eng == "cross") outer(st$theta, st$rho) else 0
+    mu <- matrix(st$lambda, N, K, byrow = TRUE) - st$zeta - cross_effect
     s2 <- matrix(st$sigma2, N, K, byrow = TRUE)
-    e <- if (S$qr && S$eng == "cross") { k <- ald_k(S$q); nu <- matrix(stats::rexp(N * K, 1 / s2), N); k[1] * nu + sqrt(k[2] * s2 * nu) * stats::rnorm(N * K) }
-         else sqrt(s2) * stats::rnorm(N * K)
-    L <- mu + e
+    resid <- if (S$qr && S$eng == "cross") matrix(ald_draws(N * K, s2, S$q), N) else sqrt(s2) * stats::rnorm(N * K)
+    L <- mu + resid
   }
-  list(Y = Y, L = L %||% matrix(0, N, K))
+  list(Y = Y, L = L)
 }
 
 # ---- Geweke's successive-conditional simulator ------------------------------------------------------
 ck_geweke <- function(S, n_iter, probs, n_prior) {
-  st <- ck_state(S); D <- ck_data(S, st)
-  G <- matrix(NA_real_, n_iter, length(S$names), dimnames = list(NULL, S$names))
+  state <- ck_state(S)
+  data <- ck_data(S, state)
+  chain <- matrix(NA_real_, n_iter, length(S$names), dimnames = list(NULL, S$names))
   for (it in seq_len(n_iter)) {
-    r <- ck_run(S, D$Y, D$L, st, 1L, 0L)
-    G[it, ] <- r$draws[1, ]
-    st <- ck_persons(S, lapply(r$last, as.vector))     # persons and data anew given the parameters
-    D <- ck_data(S, st)
+    result <- ck_run(S, data$Y, data$L, state, 1L, 0L)
+    chain[it, ] <- result$draws[1, ]
+    state <- ck_persons(S, lapply(result$last, as.vector))     # persons and data anew given the parameters
+    data <- ck_data(S, state)
   }
-  G <- G[-seq_len(round(n_iter / 10)), , drop = FALSE]
-  R <- ck_stored(S, ck_prior(S, n_prior))
-  geweke_table(G, R, probs, n_prior, sprintf("%d iterations (first 10%% dropped); P(parameter <= prior quantile) in the chain vs %g prior draws",
-                                             n_iter, n_prior))
+  chain <- chain[-seq_len(round(n_iter / 10)), , drop = FALSE]
+  prior_draws <- ck_stored(S, ck_prior(S, n_prior))
+  detail <- sprintf("%d iterations (first 10%% dropped); P(parameter <= prior quantile) in the chain vs %g prior draws",
+                    n_iter, n_prior)
+  geweke_table(chain, prior_draws, probs, n_prior, detail)
 }
 
 # chain G against prior draws R: proportions below prior quantiles, ESS-based z-tests, Holm
 geweke_table <- function(G, R, probs, n_prior, detail) {
   rows <- list()
   for (j in colnames(G)) {
-    if (stats::sd(R[, j]) == 0) next                   # fixed by the model (1PL a, fixed speed variance)
-    qs <- stats::quantile(R[, j], probs, names = FALSE)
+    if (stats::sd(R[, j]) == 0) {                   # fixed by the model (1PL a, fixed speed variance)
+      next
+    }
+    prior_quantiles <- stats::quantile(R[, j], probs, names = FALSE)
     for (k in seq_along(probs)) {
-      I <- as.numeric(G[, j] <= qs[k]); ph <- mean(I); pk <- mean(R[, j] <= qs[k])
-      ess <- if (stats::var(I) > 0) max(1, unname(coda::effectiveSize(I))) else NA      # NA: the chain never crossed the quantile
-      se <- sqrt(pk * (1 - pk) / (if (is.na(ess)) 1 else ess) + pk * (1 - pk) / n_prior)
-      z <- (ph - pk) / se
-      rows[[length(rows) + 1]] <- data.frame(parameter = j, prob = probs[k], prior = pk, sampler = ph, ess = round(ess), z = z,
-                                             p.value = 2 * stats::pnorm(-abs(z)))
+      rows[[length(rows) + 1]] <- geweke_row(G[, j], R[, j], prior_quantiles[k], probs[k], n_prior, j)
     }
   }
-  out <- do.call(rbind, rows); out$p.holm <- stats::p.adjust(out$p.value, "holm")
-  structure(out, class = c("rtirt_check", "data.frame"), method = "geweke", passed = all(out$p.holm > 0.01), draws = G, detail = detail)
+  table <- do.call(rbind, rows)
+  table$p.holm <- stats::p.adjust(table$p.value, "holm")
+  structure(table, class = c("rtirt_check", "data.frame"), method = "geweke", passed = all(table$p.holm > 0.01),
+            draws = G, detail = detail)
+}
+
+# P(parameter <= prior quantile) in the chain vs the prior draws, z-test with the chain's ESS
+geweke_row <- function(chain, prior_draws, quantile, prob, n_prior, parameter) {
+  below <- as.numeric(chain <= quantile)
+  p_chain <- mean(below)
+  p_prior <- mean(prior_draws <= quantile)
+  ess <- if (stats::var(below) > 0) max(1, unname(coda::effectiveSize(below))) else NA   # NA: the chain never crossed the quantile
+  se <- sqrt(p_prior * (1 - p_prior) / (if (is.na(ess)) 1 else ess) + p_prior * (1 - p_prior) / n_prior)
+  z <- (p_chain - p_prior) / se
+  data.frame(parameter = parameter, prob = prob, prior = p_prior, sampler = p_chain, ess = round(ess), z = z,
+             p.value = 2 * stats::pnorm(-abs(z)))
 }
 
 # ---- simulation-based calibration --------------------------------------------------------------------
@@ -285,21 +402,30 @@ ck_sbc <- function(S, n_iter, n_rep, n_draws) {
   keep <- round(seq(n_burn + 1, n_iter, length.out = n_draws))
   ranks <- matrix(NA_integer_, n_rep, length(S$names), dimnames = list(NULL, S$names))
   for (l in seq_len(n_rep)) {
-    st <- ck_state(S); D <- ck_data(S, st)
-    init <- initial_values(S$eng, list(Y = D$Y, log_t = D$L), S$X, S$fixed)
-    r <- ck_run(S, D$Y, D$L, init, as.integer(n_iter), as.integer(n_burn))
-    truth <- ck_stored(S, lapply(st, function(x) matrix(x, 1)))
-    dr <- r$draws[keep, , drop = FALSE]
-    ranks[l, ] <- colSums(dr < matrix(truth, n_draws, ncol(dr), byrow = TRUE))
+    state <- ck_state(S)
+    data <- ck_data(S, state)
+    init <- initial_values(S$eng, list(Y = data$Y, log_t = data$L), S$X, S$fixed)
+    result <- ck_run(S, data$Y, data$L, init, as.integer(n_iter), as.integer(n_burn))
+    truth <- ck_stored(S, lapply(state, function(x) matrix(x, 1)))
+    kept_draws <- result$draws[keep, , drop = FALSE]
+    ranks[l, ] <- colSums(kept_draws < matrix(truth, n_draws, ncol(kept_draws), byrow = TRUE))
   }
-  B <- 10; rows <- list()
+  n_bins <- 10
+  rows <- list()
   for (j in colnames(ranks)) {
-    if (length(unique(ranks[, j])) == 1) next
-    cnt <- tabulate(pmin((ranks[, j] * B) %/% (n_draws + 1), B - 1) + 1, B)
-    chi <- sum((cnt - n_rep / B)^2 / (n_rep / B))
-    rows[[length(rows) + 1]] <- data.frame(parameter = j, chisq = chi, df = B - 1, p.value = stats::pchisq(chi, B - 1, lower.tail = FALSE))
+    if (length(unique(ranks[, j])) == 1) {
+      next
+    }
+    counts <- tabulate(pmin((ranks[, j] * n_bins) %/% (n_draws + 1), n_bins - 1) + 1, n_bins)
+    expected <- n_rep / n_bins
+    chi <- sum((counts - expected)^2 / expected)
+    rows[[length(rows) + 1]] <- data.frame(parameter = j, chisq = chi, df = n_bins - 1,
+                                           p.value = stats::pchisq(chi, n_bins - 1, lower.tail = FALSE))
   }
-  out <- do.call(rbind, rows); out$p.holm <- stats::p.adjust(out$p.value, "holm")
-  structure(out, class = c("rtirt_check", "data.frame"), method = "sbc", passed = all(out$p.holm > 0.01), ranks = ranks,
-            detail = sprintf("%d simulated data sets; ranks among %d of %d post-burn-in draws; chi-square over %d bins", n_rep, n_draws, n_iter - n_burn, B))
+  table <- do.call(rbind, rows)
+  table$p.holm <- stats::p.adjust(table$p.value, "holm")
+  detail <- sprintf("%d simulated data sets; ranks among %d of %d post-burn-in draws; chi-square over %d bins",
+                    n_rep, n_draws, n_iter - n_burn, n_bins)
+  structure(table, class = c("rtirt_check", "data.frame"), method = "sbc", passed = all(table$p.holm > 0.01),
+            ranks = ranks, detail = detail)
 }

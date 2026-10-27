@@ -34,14 +34,22 @@
 #' @export
 person_fit <- function(object, flag = 0.95, ...) {
   need_post(object)
-  if (!.model_info[[class(object)[1]]]$rt) stop("person_fit() needs a model with response times", call. = FALSE)
-  if (identical(.model_info[[class(object)[1]]]$engine, "cross") && isTRUE(object$qr))
+  info <- .model_info[[class(object)[1]]]
+  if (!info$rt) {
+    stop("person_fit() needs a model with response times", call. = FALSE)
+  }
+  if (identical(info$engine, "cross") && isTRUE(object$qr)) {
     stop("the chi-square person fit needs normal log times; rtirt_cross(quantile = ) has ALD times", call. = FALSE)
-  pf <- object$post$person$rt_fit
-  if (is.null(pf)) stop("refit with this version of birtRcpp: the fit has no person-fit statistics", call. = FALSE)
-  K <- ncol(object$data$Y)
-  out <- data.frame(id = object$data$id %||% seq_along(pf$lt), lt = pf$lt, df = K, p_flag = pf$exceed, flagged = pf$exceed >= flag)
-  structure(out, share = mean(out$flagged), share_mean = mean(out$lt > stats::qchisq(0.95, K)))
+  }
+  rt_fit <- object$post$person$rt_fit
+  if (is.null(rt_fit)) {
+    stop("refit with this version of birtRcpp: the fit has no person-fit statistics", call. = FALSE)
+  }
+  n_item <- ncol(object$data$Y)
+  id <- object$data$id %||% seq_along(rt_fit$lt)
+  table <- data.frame(id = id, lt = rt_fit$lt, df = n_item, p_flag = rt_fit$exceed, flagged = rt_fit$exceed >= flag)
+  share_mean <- mean(table$lt > stats::qchisq(0.95, n_item))
+  structure(table, share = mean(table$flagged), share_mean = share_mean)
 }
 
 #' Test of conditional independence between responses and response times
@@ -72,36 +80,67 @@ person_fit <- function(object, flag = 0.95, ...) {
 #' ci_test(ecm(rtirt_null(d), se = FALSE))
 #' @export
 ci_test <- function(object, ...) {
-  if (is.null(object$ecm) || !.model_info[[class(object)[1]]]$rt) stop("ci_test() needs an ecm() fit of a model with response times", call. = FALSE)
-  if (isTRUE(object$ecm$map)) stop("ci_test() uses the maximum likelihood fit: ecm(model), not ecm(model, prior = \"map\")", call. = FALSE)
-  E <- em_setup(object, object$ecm$nodes, FALSE); x0 <- object$ecm$x; np <- length(x0); K <- E$K; N <- E$N
-  # score of the model extended by the shifts delta (log t - delta y): nuisance part (Fisher identity, em_score())
-  # and the part of delta, sum_i y_ij E[log t - delta_j y - lambda + zeta + rho theta | data] / sigma2_j
-  score <- function(z) {
-    E2 <- E; E2$L <- E$L - E$Y * matrix(z[np + seq_len(K)], N, K, byrow = TRUE)
-    p <- em_unpack(z[seq_len(np)], E2); mo <- em_moments(em_estep(p, E2))
-    rho <- if (E$eng == "cross") p$rho else rep(0, K)
-    R <- sweep(E2$L, 2, p$lambda) + mo$Ez + outer(mo$Et, rho)
-    c(em_score(z[seq_len(np)], E2), colSums(E$Y * R) / p$sigma2t)
+  if (is.null(object$ecm) || !.model_info[[class(object)[1]]]$rt) {
+    stop("ci_test() needs an ecm() fit of a model with response times", call. = FALSE)
   }
-  z0 <- c(x0, rep(0, K)); g <- score(z0)[np + seq_len(K)]
-  # observed information of the extended model: central differences of the analytic score (as ecm())
-  H <- vapply(seq_along(z0), function(k) { h <- 1e-4 * max(1, abs(z0[k])); e <- replace(numeric(length(z0)), k, h)
-    (score(z0 + e) - score(z0 - e)) / (2 * h) }, numeric(length(z0)))
-  I <- -(H + t(H)) / 2; th <- seq_len(np); dl <- np + seq_len(K)
-  Ieff <- I[dl, dl] - I[dl, th] %*% solve(I[th, th], I[th, dl])         # nuisance parameters projected out
-  stat <- g^2 / diag(Ieff)
-  out <- data.frame(item = E$items, delta = g / diag(Ieff), statistic = stat, p.value = stats::pchisq(stat, 1, lower.tail = FALSE))
-  out$p.holm <- stats::p.adjust(out$p.value, "holm")
-  ov <- drop(t(g) %*% solve(Ieff, g))
-  structure(out, class = c("rtirt_ci_test", "data.frame"), overall = c(statistic = ov, df = K, p.value = stats::pchisq(ov, K, lower.tail = FALSE)))
+  if (isTRUE(object$ecm$map)) {
+    stop("ci_test() uses the maximum likelihood fit: ecm(model), not ecm(model, prior = \"map\")", call. = FALSE)
+  }
+  E <- em_setup(object, object$ecm$nodes, FALSE)
+  x0 <- object$ecm$x
+  n_par <- length(x0)
+  n_item <- E$K
+  score <- extended_score(E, n_par)
+  z0 <- c(x0, rep(0, n_item))
+  nuisance <- seq_len(n_par)
+  shifts <- n_par + seq_len(n_item)
+  gradient <- score(z0)[shifts]
+  information <- numeric_information(score, z0)
+  # nuisance parameters projected out
+  info_eff <- information[shifts, shifts] - information[shifts, nuisance] %*%
+    solve(information[nuisance, nuisance], information[nuisance, shifts])
+  statistic <- gradient^2 / diag(info_eff)
+  table <- data.frame(item = E$items, delta = gradient / diag(info_eff), statistic = statistic,
+                      p.value = stats::pchisq(statistic, 1, lower.tail = FALSE))
+  table$p.holm <- stats::p.adjust(table$p.value, "holm")
+  overall <- drop(t(gradient) %*% solve(info_eff, gradient))
+  overall_test <- c(statistic = overall, df = n_item, p.value = stats::pchisq(overall, n_item, lower.tail = FALSE))
+  structure(table, class = c("rtirt_ci_test", "data.frame"), overall = overall_test)
+}
+
+# score of the model extended by the shifts delta (log t - delta y): nuisance part (Fisher identity,
+# em_score()) and the part of delta, sum_i y_ij E[log t - delta_j y - lambda + zeta + rho theta | data] / sigma2_j
+extended_score <- function(E, n_par) {
+  n_item <- E$K
+  function(z) {
+    shift <- matrix(z[n_par + seq_len(n_item)], E$N, n_item, byrow = TRUE)
+    E_shifted <- E
+    E_shifted$L <- E$L - E$Y * shift
+    p <- em_unpack(z[seq_len(n_par)], E_shifted)
+    mo <- em_moments(em_estep(p, E_shifted))
+    rho <- if (E$eng == "cross") p$rho else rep(0, n_item)
+    resid <- sweep(E_shifted$L, 2, p$lambda) + mo$Ez + outer(mo$Et, rho)
+    c(em_score(z[seq_len(n_par)], E_shifted), colSums(E$Y * resid) / p$sigma2t)
+  }
+}
+
+# observed information: central differences of the analytic score (as ecm())
+numeric_information <- function(score, z0) {
+  column <- function(k) {
+    h <- 1e-4 * max(1, abs(z0[k]))
+    step <- replace(numeric(length(z0)), k, h)
+    (score(z0 + step) - score(z0 - step)) / (2 * h)
+  }
+  hessian <- vapply(seq_along(z0), column, numeric(length(z0)))
+  -(hessian + t(hessian)) / 2
 }
 
 #' @export
 print.rtirt_ci_test <- function(x, digits = 3, ...) {
-  o <- attr(x, "overall")
+  overall <- attr(x, "overall")
   cat("Conditional independence of responses and response times (van der Linden & Glas, 2010)\n")
-  cat(sprintf("  all items: LM = %.2f, df = %d, p = %.3g\n\n", o[["statistic"]], as.integer(o[["df"]]), o[["p.value"]]))
+  cat(sprintf("  all items: LM = %.2f, df = %d, p = %.3g\n\n", overall[["statistic"]], as.integer(overall[["df"]]),
+              overall[["p.value"]]))
   print.data.frame(x, digits = digits, row.names = FALSE)
   invisible(x)
 }
@@ -135,26 +174,70 @@ print.rtirt_ci_test <- function(x, digits = 3, ...) {
 #' colMeans(pk[c("p_chi_pf", "p_Lambda_s", "p_L_s")] < 0.01)    # about .01 under the model
 #' @export
 preknowledge_test <- function(object, compromised, ...) {
-  eng <- .model_info[[class(object)[1]]]$engine
-  if (!eng %in% c("rtirt", "latent") || !.model_info[[class(object)[1]]]$rt) stop("preknowledge_test() needs rtirt_null(), rtirt_latreg() or rtirt_latent()", call. = FALSE)
-  par <- if (!is.null(object$post)) object$post$mean else { p <- object$ecm$par; list(a = p$a, b = p$b, lambda = p$lambda, sigma2t = p$sigma2t) }
-  if (is.null(par$a)) stop("no item parameters: fit the model with ecm() or gibbs()", call. = FALSE)
-  D <- object$data; Y <- D$Y; L <- D$log_t; K <- ncol(Y); items <- D$items
-  cset <- if (is.logical(compromised)) compromised else if (is.character(compromised)) items %in% compromised else seq_len(K) %in% compromised
-  if (!any(cset) || all(cset)) stop("compromised must select some but not all items", call. = FALSE)
-  w <- 1 / par$sigma2t; lam <- par$lambda; a <- par$a; b <- par$b
-  R <- sweep(-L, 2, lam, "+")                                            # lambda - log t: tau + noise
-  tau <- function(s) drop(R[, s, drop = FALSE] %*% w[s]) / sum(w[s])
-  th <- tau(rep(TRUE, K))
-  chi <- rowSums(sweep((L - matrix(lam, nrow(L), K, byrow = TRUE) + th)^2, 2, w, "*"))
-  Lam <- (tau(cset) - tau(!cset)) / sqrt(1 / sum(w[cset]) + 1 / sum(w[!cset]))
-  ll <- function(t, y, s) sum(y * stats::plogis(a[s] * (t - b[s]), log.p = TRUE) + (1 - y) * stats::plogis(-a[s] * (t - b[s]), log.p = TRUE))
-  mle <- function(y, s) stats::optimize(ll, c(-8, 8), y = y, s = s, maximum = TRUE)
-  Ls <- vapply(seq_len(nrow(Y)), function(i) {
-    f <- mle(Y[i, ], rep(TRUE, K)); fc <- mle(Y[i, cset], cset); fu <- mle(Y[i, !cset], !cset)
-    G <- max(2 * (fc$objective + fu$objective - f$objective), 0)
-    sign(fc$maximum - fu$maximum) * sqrt(G)
-  }, 0)
-  data.frame(id = D$id %||% seq_len(nrow(Y)), chi_pf = chi, p_chi_pf = stats::pchisq(chi, K - 1, lower.tail = FALSE),
-             Lambda_s = Lam, p_Lambda_s = stats::pnorm(Lam, lower.tail = FALSE), L_s = Ls, p_L_s = stats::pnorm(Ls, lower.tail = FALSE))
+  info <- .model_info[[class(object)[1]]]
+  if (!info$engine %in% c("rtirt", "latent") || !info$rt) {
+    stop("preknowledge_test() needs rtirt_null(), rtirt_latreg() or rtirt_latent()", call. = FALSE)
+  }
+  par <- preknowledge_items(object)
+  data <- object$data
+  Y <- data$Y
+  L <- data$log_t
+  n_item <- ncol(Y)
+  in_set <- compromised_set(compromised, data$items, n_item)
+  w <- 1 / par$sigma2t
+  lambda <- par$lambda
+
+  # speed from lambda - log t (tau + noise), on all items and on each set
+  resid <- sweep(-L, 2, lambda, "+")
+  speed <- function(s) drop(resid[, s, drop = FALSE] %*% w[s]) / sum(w[s])
+  speed_all <- speed(rep(TRUE, n_item))
+  chi <- rowSums(sweep((L - matrix(lambda, nrow(L), n_item, byrow = TRUE) + speed_all)^2, 2, w, "*"))
+  lambda_s <- (speed(in_set) - speed(!in_set)) / sqrt(1 / sum(w[in_set]) + 1 / sum(w[!in_set]))
+  l_s <- vapply(seq_len(nrow(Y)), function(i) ability_lr(Y[i, ], in_set, par$a, par$b), 0)
+
+  data.frame(id = data$id %||% seq_len(nrow(Y)), chi_pf = chi, p_chi_pf = stats::pchisq(chi, n_item - 1, lower.tail = FALSE),
+             Lambda_s = lambda_s, p_Lambda_s = stats::pnorm(lambda_s, lower.tail = FALSE),
+             L_s = l_s, p_L_s = stats::pnorm(l_s, lower.tail = FALSE))
+}
+
+# item parameters of the fit: posterior means (gibbs()) or the ecm() estimates
+preknowledge_items <- function(object) {
+  if (!is.null(object$post)) {
+    par <- object$post$mean
+  } else {
+    p <- object$ecm$par
+    par <- list(a = p$a, b = p$b, lambda = p$lambda, sigma2t = p$sigma2t)
+  }
+  if (is.null(par$a)) {
+    stop("no item parameters: fit the model with ecm() or gibbs()", call. = FALSE)
+  }
+  par
+}
+
+compromised_set <- function(compromised, items, n_item) {
+  in_set <- if (is.logical(compromised)) {
+    compromised
+  } else if (is.character(compromised)) {
+    items %in% compromised
+  } else {
+    seq_len(n_item) %in% compromised
+  }
+  if (!any(in_set) || all(in_set)) {
+    stop("compromised must select some but not all items", call. = FALSE)
+  }
+  in_set
+}
+
+# signed likelihood-ratio statistic of different abilities on the compromised and the other items
+ability_lr <- function(y, in_set, a, b) {
+  loglik <- function(theta, y, s) {
+    eta <- a[s] * (theta - b[s])
+    sum(y * stats::plogis(eta, log.p = TRUE) + (1 - y) * stats::plogis(-eta, log.p = TRUE))
+  }
+  mle <- function(y, s) stats::optimize(loglik, c(-8, 8), y = y, s = s, maximum = TRUE)
+  fit_all <- mle(y, rep(TRUE, length(y)))
+  fit_in <- mle(y[in_set], in_set)
+  fit_out <- mle(y[!in_set], !in_set)
+  lr <- max(2 * (fit_in$objective + fit_out$objective - fit_all$objective), 0)
+  sign(fit_in$maximum - fit_out$maximum) * sqrt(lr)
 }
