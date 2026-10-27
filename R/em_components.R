@@ -83,17 +83,27 @@ NULL
 
 #' @rdname em_components
 #' @export
-calc_nodes <- function(Q = 41) { gh <- statmod::gauss.quad.prob(Q, "normal"); list(z = gh$nodes, logw = log(gh$weights)) }
+calc_nodes <- function(Q = 41) {
+  gh <- statmod::gauss.quad.prob(Q, "normal")
+  list(z = gh$nodes, logw = log(gh$weights))
+}
 
 #' @rdname em_components
 #' @export
 calc_loglik_nodes <- function(Y, a, b, theta) {
-  if (is.matrix(theta)) return(.em_loglik_nodes(as_mat(Y), as.numeric(a), as.numeric(b), as_mat(theta)))
-  Y <- as.matrix(Y); M <- !is.na(Y); Y0 <- ifelse(M, Y, 0)
-  eta <- outer(theta, a) - matrix(a * b, length(theta), length(a), byrow = TRUE)              # Q x K, common to all persons
-  base <- outer(drop(Y0 %*% a), theta) - drop(Y0 %*% (a * b))                                 # sum_i y eta
-  if (all(M)) base - matrix(rowSums(softplus(eta)), nrow(Y), length(theta), byrow = TRUE)
-  else base - (M * 1) %*% t(softplus(eta))
+  if (is.matrix(theta)) {
+    return(.em_loglik_nodes(as_mat(Y), as.numeric(a), as.numeric(b), as_mat(theta)))
+  }
+  Y <- as.matrix(Y)
+  M <- !is.na(Y)
+  Y0 <- ifelse(M, Y, 0)
+  eta <- outer(theta, a) - matrix(a * b, length(theta), length(a), byrow = TRUE) # Q x K, common to all persons
+  base <- outer(drop(Y0 %*% a), theta) - drop(Y0 %*% (a * b)) # sum_i y eta
+  if (all(M)) {
+    base - matrix(rowSums(softplus(eta)), nrow(Y), length(theta), byrow = TRUE)
+  } else {
+    base - (M * 1) %*% t(softplus(eta))
+  }
 }
 
 #' @rdname em_components
@@ -108,7 +118,8 @@ calc_normal_given_nodes <- function(o, w, m, v) {
 # N(mean, var), var = 1 / (1/v + sum w); the log integral is what ecm(), marginal_loglik() and
 # calc_normal_given_nodes() add for speed.
 normal_given_sums <- function(s1, s2, w, m, v) {
-  P <- 1 / v + sum(w); mu <- (m / v + s1) / P
+  P <- 1 / v + sum(w)
+  mu <- (m / v + s1) / P
   list(logI = -0.5 * length(w) * log(2 * pi) + 0.5 * sum(log(w)) - 0.5 * log(v * P) - 0.5 * (s2 + m^2 / v - P * mu^2), mean = mu, var = 1 / P)
 }
 
@@ -116,22 +127,29 @@ normal_given_sums <- function(s1, s2, w, m, v) {
 #' @export
 calc_node_weights <- function(logL, logw = 0) {
   L <- if (length(logw) == 1 && logw == 0) logL else logL + matrix(logw, nrow(logL), ncol(logL), byrow = TRUE)
-  mx <- apply(L, 1, max); ll <- mx + log(rowSums(exp(L - mx)))           # log-sum-exp per person
+  mx <- apply(L, 1, max)
+  ll <- mx + log(rowSums(exp(L - mx))) # log-sum-exp per person
   list(W = exp(L - ll), ll = ll)
 }
 
 #' @rdname em_components
 #' @export
 calc_artificial_data <- function(W, Y) {
-  Y <- as.matrix(Y); M <- !is.na(Y)
+  Y <- as.matrix(Y)
+  M <- !is.na(Y)
   list(n = crossprod(W, M * 1), r = crossprod(W, ifelse(M, Y, 0)))
 }
 
 #' @rdname em_components
 #' @export
 calc_item_sums <- function(Y, a, b, theta, W, score = FALSE) {
-  if (is.matrix(theta)) { r <- .em_item_sums(as_mat(Y), as.numeric(a), as.numeric(b), as_mat(theta), W, score); return(lapply(r, as.vector)) }
-  ad <- calc_artificial_data(W, Y); Q <- length(theta); K <- length(a)
+  if (is.matrix(theta)) {
+    r <- .em_item_sums(as_mat(Y), as.numeric(a), as.numeric(b), as_mat(theta), W, score)
+    return(lapply(r, as.vector))
+  }
+  ad <- calc_artificial_data(W, Y)
+  Q <- length(theta)
+  K <- length(a)
   eta <- outer(theta, a) - matrix(a * b, Q, K, byrow = TRUE)
   G <- if (score) ad$r - ad$n * stats::plogis(eta) else ad$n * pg_mean(eta)
   list(S0 = colSums(G), S1 = colSums(G * theta), S2 = if (score) numeric(K) else colSums(G * theta^2))
@@ -140,45 +158,77 @@ calc_item_sums <- function(Y, a, b, theta, W, score = FALSE) {
 #' @rdname em_components
 #' @export
 update_items_logistic <- function(S, T0, T1, a, b, prior_a = NULL, prior_b = NULL) {
-  S0 <- S$S0; S1 <- S$S1; S2 <- S$S2
-  if (is.null(prior_a) && is.null(prior_b)) {             # eta = a theta - d: 2 x 2 weighted least squares, keep a > 0
-    dt <- S2 * S0 - S1^2; an <- (S0 * T1 - S1 * T0) / dt; d <- (S1 * T1 - S2 * T0) / dt
-    a0 <- a; d0 <- a * b
-    for (k in which(!(an > 1e-3))) {                      # the minorizer rises along the segment
-      t <- 1; repeat { t <- t / 2; at <- a0[k] + t * (an[k] - a0[k]); if (at > 1e-3 || t < 1e-8) break }
-      an[k] <- max(at, 1e-3); d[k] <- d0[k] + t * (d[k] - d0[k])
+  S0 <- S$S0
+  S1 <- S$S1
+  S2 <- S$S2
+  if (is.null(prior_a) && is.null(prior_b)) { # eta = a theta - d: 2 x 2 weighted least squares, keep a > 0
+    dt <- S2 * S0 - S1^2
+    an <- (S0 * T1 - S1 * T0) / dt
+    d <- (S1 * T1 - S2 * T0) / dt
+    a0 <- a
+    d0 <- a * b
+    for (k in which(!(an > 1e-3))) { # the minorizer rises along the segment
+      t <- 1
+      repeat {
+        t <- t / 2
+        at <- a0[k] + t * (an[k] - a0[k])
+        if (at > 1e-3 || t < 1e-8) break
+      }
+      an[k] <- max(at, 1e-3)
+      d[k] <- d0[k] + t * (d[k] - d0[k])
     }
     return(list(a = an, b = d / an))
   }
-  vb <- prior_b[[2]]^2; va <- prior_a[[2]]^2              # conditional modes of b, then a
+  vb <- prior_b[[2]]^2
+  va <- prior_a[[2]]^2 # conditional modes of b, then a
   bn <- pmin(pmax((a * (a * S1 - T0) + prior_b[[1]] / vb) / (1 / vb + a^2 * S0), prior_b[[3]]), prior_b[[4]])
-  nl <- T1 - bn * T0; pl <- S2 - 2 * bn * S1 + bn^2 * S0
+  nl <- T1 - bn * T0
+  pl <- S2 - 2 * bn * S1 + bn^2 * S0
   list(a = pmax((prior_a[[1]] / va + nl) / (1 / va + pl), 1e-3), b = bn)
 }
 
 #' @rdname em_components
 #' @export
 em_squarem <- function(x, Fmap, max_iter = 1000, tol = 1e-10, accelerate = TRUE, progress = NULL) {
-  trace <- numeric(); conv <- FALSE; it <- 0
+  trace <- numeric()
+  conv <- FALSE
+  it <- 0
   r <- Fmap(x)
   while (it < max_iter) {
-    it <- it + 1; trace[it] <- r$obj
-    if (accelerate) {                                    # SqS3 with a monotone fall-back
-      r2 <- Fmap(r$x); d1 <- r$x - x; d2 <- r2$x - r$x - d1
-      al <- -sqrt(sum(d1^2) / max(sum(d2^2), 1e-300)); al <- min(al, -1)
+    it <- it + 1
+    trace[it] <- r$obj
+    if (accelerate) { # SqS3 with a monotone fall-back
+      r2 <- Fmap(r$x)
+      d1 <- r$x - x
+      d2 <- r2$x - r$x - d1
+      al <- -sqrt(sum(d1^2) / max(sum(d2^2), 1e-300))
+      al <- min(al, -1)
       xa <- x - 2 * al * d1 + al^2 * d2
       ra <- tryCatch(Fmap(xa), error = function(e) NULL)
-      if (!is.null(ra) && is.finite(ra$obj) && ra$obj >= r$obj) { xn <- xa; rn <- ra } else { xn <- r$x; rn <- r2 }
-    } else { xn <- r$x; rn <- Fmap(xn) }
+      if (!is.null(ra) && is.finite(ra$obj) && ra$obj >= r$obj) {
+        xn <- xa
+        rn <- ra
+      } else {
+        xn <- r$x
+        rn <- r2
+      }
+    } else {
+      xn <- r$x
+      rn <- Fmap(xn)
+    }
     if (!is.null(progress)) progress(it, rn$obj)
     if (!all(is.finite(xn)) || !is.finite(rn$obj)) {
       warning(sprintf("EM stopped at iteration %d: the step gave non-finite values (a parameter went to 0 or infinity)", it), call. = FALSE)
       break
     }
-    dx <- max(abs(xn - x)); x <- xn
+    dx <- max(abs(xn - x))
+    x <- xn
     done <- abs(rn$obj - r$obj) <= tol * abs(rn$obj) && dx <= sqrt(tol)
     r <- rn
-    if (done) { conv <- TRUE; break }
+    if (done) {
+      conv <- TRUE
+      break
+    }
   }
   trace[it + 1] <- r$obj
   list(x = x, obj = r$obj, iterations = it, converged = conv, trace = trace)
@@ -187,7 +237,8 @@ em_squarem <- function(x, Fmap, max_iter = 1000, tol = 1e-10, accelerate = TRUE,
 #' @rdname em_components
 #' @export
 calc_hessian <- function(score, x, h = 1e-4) {
-  n <- length(x); H <- matrix(0, n, n)
+  n <- length(x)
+  H <- matrix(0, n, n)
   for (j in seq_len(n)) {
     e <- replace(numeric(n), j, h * max(1, abs(x[j])))
     H[, j] <- (score(x + e) - score(x - e)) / (2 * e[j])
