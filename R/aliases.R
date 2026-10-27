@@ -37,8 +37,9 @@ NULL
 #' @rdname julia_aliases
 #' @export
 setCond <- function(nSubj = 2000, nItem = 15, nFeat = 3, nIter = 5000, nChain = 4, nBurnin = NULL, nThin = 1,
-                    nRep = 10, qRa = 0.5, qRt = 0.5)
+                    nRep = 10, qRa = 0.5, qRt = 0.5) {
   set_cond(nSubj, nItem, nFeat, nIter, nChain, nBurnin, nThin, nRep, qRa, qRt)
+}
 #' @rdname julia_aliases
 #' @export
 InputData <- function(Y, T = NULL, X = NULL) input_data(resp = Y, time = T, cov = X)
@@ -52,36 +53,43 @@ InputPara <- function(...) input_para(...)
 tp_of <- function(truePara, Data) if (is.null(truePara)) attr(Data, "true_para") else truePara
 #' @rdname julia_aliases
 #' @export
-GibbsMlIrt <- function(Cond, Data, truePara = NULL, Para = NULL)
+GibbsMlIrt <- function(Cond, Data, truePara = NULL, Para = NULL) {
   new_model("mlirt", Data, Cond, tp_of(truePara, Data), Para)
+}
 #' @rdname julia_aliases
 #' @export
-GibbsRtIrtNull <- function(Cond, Data, truePara = NULL, Para = NULL)
+GibbsRtIrtNull <- function(Cond, Data, truePara = NULL, Para = NULL) {
   new_model("rtirt_null", Data, Cond, tp_of(truePara, Data), Para, speed_var = "fixed")
+}
 #' @rdname julia_aliases
 #' @export
-GibbsRtIrt <- function(Cond, Data, truePara = NULL, Para = NULL)
+GibbsRtIrt <- function(Cond, Data, truePara = NULL, Para = NULL) {
   new_model("rtirt_latreg", Data, Cond, tp_of(truePara, Data), Para, speed_var = "fixed")
+}
 #' @rdname julia_aliases
 #' @export
-GibbsRtIrtLatent <- function(Cond, Data, truePara = NULL, Para = NULL)
+GibbsRtIrtLatent <- function(Cond, Data, truePara = NULL, Para = NULL) {
   new_model("rtirt_latent", Data, Cond, tp_of(truePara, Data), Para)
+}
 #' @rdname julia_aliases
 #' @export
-GibbsRtIrtLatentQr <- function(Cond, Data, truePara = NULL, Para = NULL)
+GibbsRtIrtLatentQr <- function(Cond, Data, truePara = NULL, Para = NULL) {
   new_model("rtirt_latent", Data, Cond, tp_of(truePara, Data), Para, quantile = Cond$q_rt)
+}
 #' @rdname julia_aliases
 #' @export
-GibbsRtIrtCross <- function(Cond, Data, truePara = NULL, Para = NULL)
+GibbsRtIrtCross <- function(Cond, Data, truePara = NULL, Para = NULL) {
   new_model("rtirt_cross", Data, Cond, tp_of(truePara, Data), Para, speed_var = "fixed")
+}
 #' @rdname julia_aliases
 #' @export
-GibbsRtIrtCrossQr <- function(Cond, Data, truePara = NULL, Para = NULL)
+GibbsRtIrtCrossQr <- function(Cond, Data, truePara = NULL, Para = NULL) {
   new_model("rtirt_cross", Data, Cond, tp_of(truePara, Data), Para, quantile = Cond$q_rt, speed_var = "fixed")
+}
 
 #' @rdname julia_aliases
 #' @export
-sampleGibbs <- function(MCMC, cov2one = NULL, ...) {               # Julia: cov2one = TRUE fixes Var(speed) = 1
+sampleGibbs <- function(MCMC, cov2one = NULL, ...) { # Julia: cov2one = TRUE fixes Var(speed) = 1
   if (!is.null(cov2one)) MCMC$settings$speed_var <- if (cov2one) "fixed" else "free"
   gibbs(MCMC, ...)
 }
@@ -124,7 +132,10 @@ setDataMlIrt <- function(Cond, truePara) sim_data(Cond, truePara, "mlirt")
 setDataRtIrt <- function(Cond, truePara) sim_data(Cond, truePara, "latreg")
 #' @rdname julia_aliases
 #' @export
-setDataRtIrtNull <- function(Cond, truePara) { truePara$beta <- NULL; sim_data(Cond, truePara, "null") }
+setDataRtIrtNull <- function(Cond, truePara) {
+  truePara$beta <- NULL
+  sim_data(Cond, truePara, "null")
+}
 #' @rdname julia_aliases
 #' @export
 setDataRtIrtLatent <- function(Cond, truePara, type = "norm") sim_data(Cond, truePara, "latent", type)
@@ -136,10 +147,12 @@ setDataRtIrtCross <- function(Cond, truePara, type = "norm") sim_data(Cond, true
 #' @export
 runSimulation <- function(Cond, truePara, funcData = setDataRtIrt, funcGibbs = GibbsRtIrt, par = c("a", "b", "theta"), ...) {
   # the Julia data generator and sampler -> run_simulation(model, quantile, speed_var)
-  jl <- list(list(setDataMlIrt, GibbsMlIrt, "mlirt", FALSE, "free"), list(setDataRtIrtNull, GibbsRtIrtNull, "null", FALSE, "fixed"),
-             list(setDataRtIrt, GibbsRtIrt, "latreg", FALSE, "fixed"), list(setDataRtIrtLatent, GibbsRtIrtLatent, "latent", FALSE, "free"),
-             list(setDataRtIrtLatent, GibbsRtIrtLatentQr, "latent", TRUE, "free"), list(setDataRtIrtCross, GibbsRtIrtCross, "cross", FALSE, "fixed"),
-             list(setDataRtIrtCross, GibbsRtIrtCrossQr, "cross", TRUE, "fixed"))
+  jl <- list(
+    list(setDataMlIrt, GibbsMlIrt, "mlirt", FALSE, "free"), list(setDataRtIrtNull, GibbsRtIrtNull, "null", FALSE, "fixed"),
+    list(setDataRtIrt, GibbsRtIrt, "latreg", FALSE, "fixed"), list(setDataRtIrtLatent, GibbsRtIrtLatent, "latent", FALSE, "free"),
+    list(setDataRtIrtLatent, GibbsRtIrtLatentQr, "latent", TRUE, "free"), list(setDataRtIrtCross, GibbsRtIrtCross, "cross", FALSE, "fixed"),
+    list(setDataRtIrtCross, GibbsRtIrtCrossQr, "cross", TRUE, "fixed")
+  )
   hit <- Filter(function(r) identical(funcData, r[[1]]) && identical(funcGibbs, r[[2]]), jl)
   if (!length(hit)) stop("runSimulation(): funcData and funcGibbs must be a matching pair of the Julia functions (e.g. setDataRtIrtCross, GibbsRtIrtCross); for other designs use run_simulation()", call. = FALSE)
   r <- hit[[1]]

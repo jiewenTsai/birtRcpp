@@ -78,17 +78,34 @@ NULL
 #' @rdname compose
 #' @export
 calc_normal_part <- function(x, z, w = 1, rest = 0, by = c("item", "person")) {
-  by <- match.arg(by); z <- as.matrix(z); N <- nrow(z); K <- ncol(z)
+  by <- match.arg(by)
+  z <- as.matrix(z)
+  N <- nrow(z)
+  K <- ncol(z)
   chk <- function(v) {
-    if (length(v) == 1 || identical(dim(v), c(N, K))) return(v)
-    if (is.null(dim(v)) && length(v) == N * K) return(matrix(v, N, K))      # a vector when z has one column
-    stop(sprintf("x, w and rest must be numbers or %d x %d matrices like z (got length %d); a value per item: matrix(v, N, K, byrow = TRUE)",
-                 N, K, length(v)), call. = FALSE)
+    if (length(v) == 1 || identical(dim(v), c(N, K))) {
+      return(v)
+    }
+    if (is.null(dim(v)) && length(v) == N * K) {
+      return(matrix(v, N, K))
+    } # a vector when z has one column
+    stop(sprintf(
+      "x, w and rest must be numbers or %d x %d matrices like z (got length %d); a value per item: matrix(v, N, K, byrow = TRUE)",
+      N, K, length(v)
+    ), call. = FALSE)
   }
-  x <- chk(x); w <- chk(w); rest <- chk(rest)
-  R <- z - rest; W <- w
-  if (anyNA(R) || anyNA(W)) { obs <- !is.na(R) & !is.na(W); W <- ifelse(obs, W, 0); R <- ifelse(obs, R, 0) }
-  WX <- W * x; if (length(WX) == 1) WX <- matrix(WX, N, K)
+  x <- chk(x)
+  w <- chk(w)
+  rest <- chk(rest)
+  R <- z - rest
+  W <- w
+  if (anyNA(R) || anyNA(W)) {
+    obs <- !is.na(R) & !is.na(W)
+    W <- ifelse(obs, W, 0)
+    R <- ifelse(obs, R, 0)
+  }
+  WX <- W * x
+  if (length(WX) == 1) WX <- matrix(WX, N, K)
   s <- if (by == "item") colSums else rowSums
   normal_part(s(WX * x), s(WX * R))
 }
@@ -98,7 +115,8 @@ calc_normal_part <- function(x, z, w = 1, rest = 0, by = c("item", "person")) {
 draw_mvn <- function(prec, num, lower = -Inf, upper = Inf, max_tries = 100) {
   single <- is.matrix(prec) && length(dim(prec)) == 2
   Q <- if (single) array(prec, c(dim(prec), 1)) else prec
-  p <- dim(Q)[1]; H <- matrix(num, nrow = p)
+  p <- dim(Q)[1]
+  H <- matrix(num, nrow = p)
   if (dim(Q)[3] != ncol(H)) stop("prec has ", dim(Q)[3], " slices but num ", ncol(H), " columns", call. = FALSE)
   x <- .blk_mvn(Q, H, rep_len(lower, p), rep_len(upper, p), as.integer(max_tries))
   if (single) drop(x) else x
@@ -107,7 +125,10 @@ draw_mvn <- function(prec, num, lower = -Inf, upper = Inf, max_tries = 100) {
 #' @rdname compose
 #' @export
 draw_items_mh <- function(Y, theta, a, b, prior_mean, prior_prec, link = c("logit", "probit"), form = c("difficulty", "intercept")) {
-  link <- match.arg(link); form <- match.arg(form); Y <- as_mat(Y); K <- ncol(Y)
+  link <- match.arg(link)
+  form <- match.arg(form)
+  Y <- as_mat(Y)
+  K <- ncol(Y)
   m <- if (is.matrix(prior_mean)) prior_mean else matrix(prior_mean, K, 2, byrow = TRUE)
   r <- .blk_items_mh(Y, as.numeric(theta), as.numeric(a), as.numeric(b), m, as.matrix(prior_prec), as.integer(link == "probit"), as.integer(form == "intercept"))
   structure(list(a = as.vector(r$a), b = as.vector(r$b)), accepted = as.logical(r$accepted))
@@ -120,7 +141,9 @@ draw_invwishart <- function(df, scale) solve(stats::rWishart(1, df, solve(scale)
 #' @rdname compose
 #' @export
 draw_mean_mvn <- function(X, Sigma, mean0, cov0) {
-  X <- as.matrix(X); Si <- solve(Sigma); C0 <- solve(cov0)
+  X <- as.matrix(X)
+  Si <- solve(Sigma)
+  C0 <- solve(cov0)
   draw_mvn(nrow(X) * Si + C0, drop(Si %*% colSums(X) + C0 %*% mean0))
 }
 
@@ -128,20 +151,32 @@ draw_mean_mvn <- function(X, Sigma, mean0, cov0) {
 #' @export
 draw_cor <- function(x1, x2, cor, steps = 5, step = 0.05, method = c("rw", "mala")) {
   method <- match.arg(method)
-  n <- length(x1); s11 <- sum(x1^2); s22 <- sum(x2^2); s12 <- sum(x1 * x2)
-  lp <- function(r) -n / 2 * log(1 - r^2) - (s11 - 2 * r * s12 + s22) / (2 * (1 - r^2)) + log(1 - r^2)   # + Jacobian of tanh
+  n <- length(x1)
+  s11 <- sum(x1^2)
+  s22 <- sum(x2^2)
+  s12 <- sum(x1 * x2)
+  lp <- function(r) -n / 2 * log(1 - r^2) - (s11 - 2 * r * s12 + s22) / (2 * (1 - r^2)) + log(1 - r^2) # + Jacobian of tanh
   acc <- 0
-  if (method == "mala") {                                # MALA on z = atanh(cor)
-    lpz <- function(z) { r <- tanh(z); u <- 1 - r^2
+  if (method == "mala") { # MALA on z = atanh(cor)
+    lpz <- function(z) {
+      r <- tanh(z)
+      u <- 1 - r^2
       dq <- (-s12 * u + r * (s11 - 2 * r * s12 + s22)) / u^2
-      list(lp = lp(r), grad = ((n - 2) * r / u - dq) * u) }
+      list(lp = lp(r), grad = ((n - 2) * r / u - dq) * u)
+    }
     z <- atanh(cor)
-    for (k in seq_len(steps)) { z <- draw_mala(z, lpz, step); acc <- acc + attr(z, "accepted") }
+    for (k in seq_len(steps)) {
+      z <- draw_mala(z, lpz, step)
+      acc <- acc + attr(z, "accepted")
+    }
     return(structure(tanh(as.numeric(z)), accepted = acc / steps))
   }
   for (k in seq_len(steps)) {
     rp <- tanh(atanh(cor) + step * stats::rnorm(1))
-    if (log(stats::runif(1)) < lp(rp) - lp(cor)) { cor <- rp; acc <- acc + 1 }
+    if (log(stats::runif(1)) < lp(rp) - lp(cor)) {
+      cor <- rp
+      acc <- acc + 1
+    }
   }
   structure(cor, accepted = acc / steps)
 }
@@ -149,6 +184,7 @@ draw_cor <- function(x1, x2, cor, steps = 5, step = 0.05, method = c("rw", "mala
 #' @rdname compose
 #' @export
 calc_person_fit <- function(L, fitted, sigma2) {
-  L <- as_mat(L); R <- (L - as_mat(fitted))^2 / matrix(sigma2, nrow(L), ncol(L), byrow = TRUE)
+  L <- as_mat(L)
+  R <- (L - as_mat(fitted))^2 / matrix(sigma2, nrow(L), ncol(L), byrow = TRUE)
   data.frame(lt = rowSums(R, na.rm = TRUE), df = rowSums(!is.na(R)))
 }

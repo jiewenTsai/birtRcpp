@@ -88,16 +88,24 @@ pv_of <- function(priors) {
   prior_vector(priors)
 }
 chk_b_mean <- function(b_mean, K) {
-  if (is.null(b_mean)) return(numeric())
+  if (is.null(b_mean)) {
+    return(numeric())
+  }
   if (length(b_mean) != K || anyNA(b_mean)) stop(sprintf("b_mean needs one prior mean per item (%d), got %d", K, length(b_mean)), call. = FALSE)
   as.numeric(b_mean)
 }
-as_mat <- function(x) { x <- as.matrix(x); storage.mode(x) <- "double"; x }
+as_mat <- function(x) {
+  x <- as.matrix(x)
+  storage.mode(x) <- "double"
+  x
+}
 
 # dimension checks with readable messages; missing responses (NA) become y = 1/2 with omega = 0, so
 # that the cell adds nothing to the Polya-Gamma terms (kappa = y - 1/2 = 0)
 chk_irt <- function(Y, omega, a = NULL, b = NULL, theta = NULL, what) {
-  Y <- as_mat(Y); N <- nrow(Y); K <- ncol(Y)
+  Y <- as_mat(Y)
+  N <- nrow(Y)
+  K <- ncol(Y)
   err <- function(...) stop(sprintf(...), call. = FALSE)
   if (!is.null(a) && length(a) != K) err("%s(): a has %d values but Y has %d items (columns)", what, length(a), K)
   if (!is.null(b) && length(b) != K) err("%s(): b has %d values but Y has %d items (columns)", what, length(b), K)
@@ -105,7 +113,11 @@ chk_irt <- function(Y, omega, a = NULL, b = NULL, theta = NULL, what) {
   if (!is.null(omega)) {
     omega <- as_mat(omega)
     if (!identical(dim(omega), dim(Y))) err("%s(): omega is %d x %d but Y is %d x %d (persons x items)", what, nrow(omega), ncol(omega), N, K)
-    if (anyNA(Y)) { m <- is.na(Y); Y[m] <- 0.5; omega[m] <- 0 }
+    if (anyNA(Y)) {
+      m <- is.na(Y)
+      Y[m] <- 0.5
+      omega[m] <- 0
+    }
   }
   list(Y = Y, omega = omega)
 }
@@ -118,16 +130,25 @@ draw_gauss <- function(prec, num) {
 }
 #' @rdname blocks
 #' @export
-draw_invgamma <- function(shape, scale) { n <- max(length(shape), length(scale)); as.vector(.blk_invgamma(rep_len(shape, n), rep_len(scale, n))) }
+draw_invgamma <- function(shape, scale) {
+  n <- max(length(shape), length(scale))
+  as.vector(.blk_invgamma(rep_len(shape, n), rep_len(scale, n)))
+}
 #' @rdname blocks
 #' @export
-draw_tnorm <- function(mean, sd, lower = -Inf, upper = Inf) { n <- max(length(mean), length(sd)); as.vector(.blk_tnorm(rep_len(mean, n), rep_len(sd, n), lower, upper)) }
+draw_tnorm <- function(mean, sd, lower = -Inf, upper = Inf) {
+  n <- max(length(mean), length(sd))
+  as.vector(.blk_tnorm(rep_len(mean, n), rep_len(sd, n), lower, upper))
+}
 #' @rdname blocks
 #' @export
 draw_omega <- function(a, b, theta) {
-  if (length(a) != length(b))
-    stop(sprintf("draw_omega(a, b, theta): a and b need one value per item (lengths %d and %d)%s", length(a), length(b),
-                 if (length(theta) == length(b)) "; the order is draw_omega(a, b, theta): items first, persons last" else ""), call. = FALSE)
+  if (length(a) != length(b)) {
+    stop(sprintf(
+      "draw_omega(a, b, theta): a and b need one value per item (lengths %d and %d)%s", length(a), length(b),
+      if (length(theta) == length(b)) "; the order is draw_omega(a, b, theta): items first, persons last" else ""
+    ), call. = FALSE)
+  }
   .blk_omega(as.numeric(a), as.numeric(b), as.numeric(theta))
 }
 #' @rdname blocks
@@ -140,7 +161,8 @@ draw_pg <- function(eta) .blk_pg(as_mat(eta))
 #' @export
 irt_part <- function(Y, omega, a, b) {
   d <- chk_irt(Y, omega, a = a, b = b, what = "irt_part")
-  r <- .blk_irt_part(d$Y, d$omega, as.numeric(a), as.numeric(b)); normal_part(r$prec, r$num)
+  r <- .blk_irt_part(d$Y, d$omega, as.numeric(a), as.numeric(b))
+  normal_part(r$prec, r$num)
 }
 #' @rdname blocks
 #' @export
@@ -154,7 +176,8 @@ draw_items_pg <- function(Y, omega, theta, a, priors = rtirt_priors(), one_pl = 
 draw_items_joint <- function(Y, theta, a, b, priors = rtirt_priors(), b_mean = NULL) {
   chk_irt(Y, NULL, a = a, b = b, theta = theta, what = "draw_items_joint")
   r <- .blk_items_joint(as_mat(Y), as.numeric(theta), as.numeric(a), as.numeric(b), pv_of(priors), chk_b_mean(b_mean, length(a)))
-  an <- as.vector(r$a); bn <- as.vector(r$b)
+  an <- as.vector(r$a)
+  bn <- as.vector(r$b)
   structure(list(a = an, b = bn), accepted = an != a | bn != b)
 }
 #' @rdname blocks
@@ -164,21 +187,31 @@ draw_lambda <- function(L, m, k1nu, W, mu, sd, lower = 0) {
   as.vector(.blk_lambda(as_mat(L), as_mat(m), as_mat(k1nu), as_mat(W), mu, sd, lower))
 }
 # the RT blocks of the built-in samplers need complete log times
-chk_no_na <- function(L, what) if (anyNA(L))
-  stop(sprintf("%s(): the log times contain NA; for missing times use calc_normal_part() with draw() and draw_var()", what), call. = FALSE)
+chk_no_na <- function(L, what) {
+  if (anyNA(L)) {
+    stop(sprintf("%s(): the log times contain NA; for missing times use calc_normal_part() with draw() and draw_var()", what), call. = FALSE)
+  }
+}
 #' @rdname blocks
 #' @export
 draw_sigma2 <- function(L, m, lambda, current, priors = rtirt_priors(), nu = NULL, q = NULL) {
   if (!is.null(nu) && is.null(q)) stop("an ALD scale needs q", call. = FALSE)
   chk_no_na(L, "draw_sigma2")
-  as.vector(.blk_sigma2(as_mat(L), as_mat(m), as.numeric(lambda), pv_of(priors), if (!is.null(nu)) as_mat(nu), if (is.null(q)) 0.5 else q,
-                        rep_len(as.numeric(current), ncol(as.matrix(L)))))
+  as.vector(.blk_sigma2(
+    as_mat(L), as_mat(m), as.numeric(lambda), pv_of(priors), if (!is.null(nu)) as_mat(nu), if (is.null(q)) 0.5 else q,
+    rep_len(as.numeric(current), ncol(as.matrix(L)))
+  ))
 }
 #' @rdname blocks
 #' @export
 draw_var <- function(alpha, beta, current, prior = c(df = 3, scale = 1)) {
-  fam <- if (identical(sort(names(prior)), c("df", "scale"))) 1 else if (identical(sort(names(prior)), c("scale", "shape"))) 0 else
+  fam <- if (identical(sort(names(prior)), c("df", "scale"))) {
+    1
+  } else if (identical(sort(names(prior)), c("scale", "shape"))) {
+    0
+  } else {
     stop("prior must be c(df = , scale = ) or c(shape = , scale = )", call. = FALSE)
+  }
   p <- if (fam == 1) prior[c("df", "scale")] else prior[c("shape", "scale")]
   .blk_var(alpha, beta, fam, p[[1]], p[[2]], current)
 }
@@ -187,12 +220,15 @@ draw_var <- function(alpha, beta, current, prior = c(df = 3, scale = 1)) {
 draw_nu <- function(r, s, q) .blk_nu(as_mat(r), as_mat(s), q)
 #' @rdname blocks
 #' @export
-draw_theta_collapsed <- function(prec, num, W, y, rho, m0, g, tau)
+draw_theta_collapsed <- function(prec, num, W, y, rho, m0, g, tau) {
   as.vector(.blk_theta_collapsed(as.numeric(prec), as.numeric(num), as_mat(W), as_mat(y), as.numeric(rho), as.numeric(m0), as.numeric(g), as.numeric(tau)))
+}
 #' @rdname blocks
 #' @export
 draw_rt_items_collapsed <- function(L, k1nu, W, theta, mz, tau, with_rho, mu, sd, rho_sd, lambda, rho, lower = 0) {
-  r <- .blk_rt_items_collapsed(as_mat(L), as_mat(k1nu), as_mat(W), as.numeric(theta), as.numeric(mz), as.numeric(tau),
-                               with_rho, mu, sd, rho_sd, as.numeric(lambda), as.numeric(rho), lower)
+  r <- .blk_rt_items_collapsed(
+    as_mat(L), as_mat(k1nu), as_mat(W), as.numeric(theta), as.numeric(mz), as.numeric(tau),
+    with_rho, mu, sd, rho_sd, as.numeric(lambda), as.numeric(rho), lower
+  )
   lapply(r, as.vector)
 }

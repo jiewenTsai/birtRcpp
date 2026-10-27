@@ -56,17 +56,30 @@ NULL
 #' @export
 draw_mala <- function(x, logpost, step, joint = FALSE) {
   shape <- x
-  if (joint) x <- matrix(as.numeric(x), 1)              # one target of length(x)
-  mat <- is.matrix(x); X <- if (mat) x else matrix(x, ncol = 1)
-  n <- nrow(X); d <- ncol(X); eps <- rep_len(step, n)
-  back <- function(Z) if (joint) { v <- shape; v[] <- as.numeric(Z); v } else if (mat) Z else drop(Z)
+  if (joint) x <- matrix(as.numeric(x), 1) # one target of length(x)
+  mat <- is.matrix(x)
+  X <- if (mat) x else matrix(x, ncol = 1)
+  n <- nrow(X)
+  d <- ncol(X)
+  eps <- rep_len(step, n)
+  back <- function(Z) {
+    if (joint) {
+      v <- shape
+      v[] <- as.numeric(Z)
+      v
+    } else if (mat) Z else drop(Z)
+  }
   ev <- function(z) {
     r <- logpost(back(z))
-    if (!is.list(r) || is.null(r$lp) || is.null(r$grad))
+    if (!is.list(r) || is.null(r$lp) || is.null(r$grad)) {
       stop("draw_mala(): logpost(x) must return list(lp = log density, grad = gradient)", call. = FALSE)
-    if (length(r$lp) != n)
-      stop(sprintf("draw_mala(): logpost() returned %d log densities for %d target(s); %s", length(r$lp), n,
-                   if (length(r$lp) == 1) "for one target of all elements use joint = TRUE" else "return one per row of x"), call. = FALSE)
+    }
+    if (length(r$lp) != n) {
+      stop(sprintf(
+        "draw_mala(): logpost() returned %d log densities for %d target(s); %s", length(r$lp), n,
+        if (length(r$lp) == 1) "for one target of all elements use joint = TRUE" else "return one per row of x"
+      ), call. = FALSE)
+    }
     if (length(r$grad) != n * d) stop(sprintf("draw_mala(): grad has %d values, x has %d", length(r$grad), n * d), call. = FALSE)
     list(lp = r$lp, grad = matrix(r$grad, n, d))
   }
@@ -75,7 +88,7 @@ draw_mala <- function(x, logpost, step, joint = FALSE) {
   Xp <- mu0 + eps * matrix(stats::rnorm(n * d), n, d)
   new <- ev(Xp)
   mu1 <- Xp + eps^2 / 2 * new$grad
-  lq <- function(to, from_mu) -rowSums((to - from_mu)^2) / (2 * eps^2)       # log proposal density up to a constant
+  lq <- function(to, from_mu) -rowSums((to - from_mu)^2) / (2 * eps^2) # log proposal density up to a constant
   logr <- new$lp - cur$lp + lq(X, mu1) - lq(Xp, mu0)
   acc <- is.finite(logr) & log(stats::runif(n)) < logr
   X[acc, ] <- Xp[acc, ]
