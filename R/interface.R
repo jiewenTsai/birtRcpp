@@ -494,8 +494,8 @@ equations.input_data <- function(object, model = NULL, itemtype = "2pl", speed_v
 #' @export
 algorithm.input_data <- function(object, model = NULL, itemtype = "2pl", speed_var = c("free", "fixed"), quantile = NULL,
                                  cov = NULL, intercept = FALSE, method = NULL, collapse = NULL,
-                                 format = c("unicode", "latex"), ...) {
+                                 format = c("unicode", "latex"), detail = TRUE, ...) {
   speed_var <- match.arg(speed_var)
   unfitted <- build_model(object, model, itemtype, speed_var, cov, quantile, intercept)
-  algorithm(unfitted, method = method, collapse = collapse, format = format)
+  algorithm(unfitted, method = method, collapse = collapse, format = format, detail = detail)
 }

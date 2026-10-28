@@ -400,3 +400,15 @@ test_that("check_sampler(), check_ecm() and the Julia constructors given data sa
   expect_error(GibbsMlIrt(dat), "gibbs\\(dat, model = \"irt\"\\)")
   expect_s3_class(GibbsRtIrtCross(set_cond(), dat), "rtirt_cross")
 })
+
+test_that("algorithm(detail = FALSE) lists the steps without the formulas", {
+  dat <- small_data()
+  full <- capture.output(print(algorithm(dat, model = "cross")))
+  brief <- capture.output(print(algorithm(dat, model = "cross", detail = FALSE)))
+  expect_lt(length(brief), length(full) / 2)
+  steps <- grep("^Step [0-9]+\\.", full, value = TRUE)
+  expect_true(length(steps) > 3)
+  expect_true(all(sub(":$", "", steps) %in% brief))
+  expect_match(brief[length(brief)], "detail = TRUE")
+  expect_equal(as.character(algorithm(dat, model = "cross", detail = FALSE)), as.character(algorithm(dat, model = "cross")))
+})

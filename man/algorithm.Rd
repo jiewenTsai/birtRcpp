@@ -15,6 +15,7 @@ algorithm(object, ...)
   method = NULL,
   collapse = NULL,
   format = c("unicode", "latex"),
+  detail = TRUE,
   ...
 )
 
@@ -23,6 +24,7 @@ algorithm(object, ...)
   method = NULL,
   collapse = NULL,
   format = c("unicode", "latex"),
+  detail = TRUE,
   ...
 )
 
@@ -39,6 +41,7 @@ algorithm(object, ...)
   method = NULL,
   collapse = NULL,
   format = c("unicode", "latex"),
+  detail = TRUE,
   ...
 )
 }
@@ -55,6 +58,9 @@ model).}
 fit (\code{FALSE} for an unfitted model).}
 
 \item{format}{\code{"unicode"} or \code{"latex"} (an \code{aligned} block).}
+
+\item{detail}{\code{TRUE} (default): every step with its formulas; \code{FALSE}: only the titles of
+the steps, an overview of one iteration.}
 
 \item{x}{An \code{rtirt_algorithm} object.}
 
@@ -79,6 +85,7 @@ algorithm(dat, model = "cross") # Gibbs full conditionals
 algorithm(dat, model = "cross", collapse = TRUE) # partially collapsed Gibbs
 algorithm(dat, model = "cross", method = "ecm") # ECM steps
 algorithm(dat, model = "cross", format = "latex")
+algorithm(dat, model = "cross", detail = FALSE) # the steps only
 }
 \seealso{
 \code{\link[=equations]{equations()}} for the model, \link{blocks} for the steps as R functions.

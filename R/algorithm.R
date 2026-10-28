@@ -19,6 +19,8 @@
 #' @param collapse For `"gibbs"`: the partially collapsed sampler; by default the setting of the
 #'   fit (`FALSE` for an unfitted model).
 #' @param format `"unicode"` or `"latex"` (an `aligned` block).
+#' @param detail `TRUE` (default): every step with its formulas; `FALSE`: only the titles of
+#'   the steps, an overview of one iteration.
 #' @param ... Unused.
 #' @return An `rtirt_algorithm` object (printed); `as.character()` gives the lines.
 #' @seealso [equations()] for the model, [blocks] for the steps as R functions.
@@ -29,13 +31,14 @@
 #' algorithm(dat, model = "cross", collapse = TRUE) # partially collapsed Gibbs
 #' algorithm(dat, model = "cross", method = "ecm") # ECM steps
 #' algorithm(dat, model = "cross", format = "latex")
+#' algorithm(dat, model = "cross", detail = FALSE) # the steps only
 #' @export
 algorithm <- function(object, ...) UseMethod("algorithm")
 
 #' @rdname algorithm
 #' @export
-algorithm.rtirt_qset <- function(object, method = NULL, collapse = NULL, format = c("unicode", "latex"), ...) {
-  out <- algorithm(object$models[[1]], method = method, collapse = collapse, format = format, ...)
+algorithm.rtirt_qset <- function(object, method = NULL, collapse = NULL, format = c("unicode", "latex"), detail = TRUE, ...) {
+  out <- algorithm(object$models[[1]], method = method, collapse = collapse, format = format, detail = detail, ...)
   out$sections <- c(out$sections, list(list(title = "Quantiles", lines = list(
     al_line("q", "\\in", sprintf("\\{%s\\}", paste(format(object$quantile), collapse = ", ")), "one model and sampler per quantile", out$format)
   ))))
@@ -44,7 +47,7 @@ algorithm.rtirt_qset <- function(object, method = NULL, collapse = NULL, format 
 
 #' @rdname algorithm
 #' @export
-algorithm.rtirt <- function(object, method = NULL, collapse = NULL, format = c("unicode", "latex"), ...) {
+algorithm.rtirt <- function(object, method = NULL, collapse = NULL, format = c("unicode", "latex"), detail = TRUE, ...) {
   format <- match.arg(format)
   fitted_em <- is.null(object$post) && !is.null(object$ecm)
   method <- match.arg(method %||% if (fitted_em) "ecm" else "gibbs", c("gibbs", "ecm"))
@@ -57,13 +60,18 @@ algorithm.rtirt <- function(object, method = NULL, collapse = NULL, format = c("
     if (format == "latex") s$title <- al_tex_text(s$title)
     s
   })
-  structure(list(sections = secs, format = format), class = c("rtirt_algorithm", "rtirt_equations"))
+  structure(list(sections = secs, format = format, detail = detail), class = c("rtirt_algorithm", "rtirt_equations"))
 }
 
 #' @rdname algorithm
 #' @param x An `rtirt_algorithm` object.
 #' @export
 print.rtirt_algorithm <- function(x, ...) {
+  if (isFALSE(x$detail)) {
+    titles <- vapply(x$sections, function(section) section$title, "")
+    cat(titles, "(algorithm(..., detail = TRUE) shows the formulas of each step)", sep = "\n")
+    return(invisible(x))
+  }
   cat(as.character(x), sep = "\n")
   invisible(x)
 }
