@@ -3,6 +3,8 @@
 \name{ecm_control}
 \alias{ecm_control}
 \alias{gibbs_control}
+\alias{print.ecm_control}
+\alias{print.gibbs_control}
 \title{Settings of the engines}
 \usage{
 ecm_control(
@@ -10,7 +12,8 @@ ecm_control(
   tol = 1e-10,
   nodes = 41,
   accelerate = TRUE,
-  verbose = FALSE
+  verbose = FALSE,
+  ...
 )
 
 gibbs_control(
@@ -18,8 +21,13 @@ gibbs_control(
   n_thin = 1,
   collapse = FALSE,
   fit_indices = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  ...
 )
+
+\method{print}{ecm_control}(x, ...)
+
+\method{print}{gibbs_control}(x, ...)
 }
 \arguments{
 \item{max_iter}{Maximum number of ECM (SQUAREM) iterations.}
@@ -33,6 +41,10 @@ parameter change (unconstrained scale) below \code{sqrt(tol)}.}
 
 \item{verbose}{\code{ecm_control()}: print the log-likelihood every 10 iterations;
 \code{gibbs_control()}: print a line per chain.}
+
+\item{...}{Not used: a name that is not a setting is an error that names the closest
+setting, or the function it belongs to (\code{gibbs_control(n_iter = 200)}: an argument of
+\code{\link[=gibbs]{gibbs()}}).}
 
 \item{n_burnin}{Burn-in per chain (default \code{n_iter / 2}).}
 
@@ -52,9 +64,13 @@ acceptance rate is in \code{post$ab_accept}). Same posterior, fewer slow directi
 PSIS-LOO in \code{\link[=fit_indices]{fit_indices()}}; see \code{\link[=marginal_loglik]{marginal_loglik()}}). \code{FALSE} skips it (it can take
 seconds to a minute for large \code{"cross"} quantile models); \code{\link[=fit_indices]{fit_indices()}} then computes
 it on request.}
+
+\item{x}{Settings from \code{ecm_control()} or \code{gibbs_control()}.}
 }
 \value{
-A list of settings.
+A list of settings of class \code{ecm_control} or \code{gibbs_control}; \code{\link[=ecm]{ecm()}} refuses a
+\code{gibbs_control()} and \code{\link[=gibbs]{gibbs()}} an \code{ecm_control()}. A plain list with the names of the
+settings is also accepted.
 }
 \description{
 The settings of \code{\link[=ecm]{ecm()}} and \code{\link[=gibbs]{gibbs()}} that are rarely changed.

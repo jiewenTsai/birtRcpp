@@ -165,19 +165,103 @@ build_model <- function(data, model, itemtype, speed_var, cov, quantile = NULL, 
 #'   PSIS-LOO in [fit_indices()]; see [marginal_loglik()]). `FALSE` skips it (it can take
 #'   seconds to a minute for large `"cross"` quantile models); [fit_indices()] then computes
 #'   it on request.
-#' @return A list of settings.
+#' @param ... Not used: a name that is not a setting is an error that names the closest
+#'   setting, or the function it belongs to (`gibbs_control(n_iter = 200)`: an argument of
+#'   [gibbs()]).
+#' @return A list of settings of class `ecm_control` or `gibbs_control`; [ecm()] refuses a
+#'   `gibbs_control()` and [gibbs()] an `ecm_control()`. A plain list with the names of the
+#'   settings is also accepted.
 #' @examples
 #' fit_settings <- gibbs_control(n_burnin = 500, collapse = TRUE)
 #' fit_settings
 #' @export
-ecm_control <- function(max_iter = 1000, tol = 1e-10, nodes = 41, accelerate = TRUE, verbose = FALSE) {
-  list(max_iter = max_iter, tol = tol, nodes = nodes, accelerate = accelerate, verbose = verbose)
+ecm_control <- function(max_iter = 1000, tol = 1e-10, nodes = 41, accelerate = TRUE, verbose = FALSE, ...) {
+  check_control_dots("ecm", list(...))
+  settings <- list(max_iter = max_iter, tol = tol, nodes = nodes, accelerate = accelerate, verbose = verbose)
+  structure(settings, class = "ecm_control")
 }
 
 #' @rdname ecm_control
 #' @export
-gibbs_control <- function(n_burnin = NULL, n_thin = 1, collapse = FALSE, fit_indices = TRUE, verbose = TRUE) {
-  list(n_burnin = n_burnin, n_thin = n_thin, collapse = collapse, fit_indices = fit_indices, verbose = verbose)
+gibbs_control <- function(n_burnin = NULL, n_thin = 1, collapse = FALSE, fit_indices = TRUE, verbose = TRUE, ...) {
+  check_control_dots("gibbs", list(...))
+  settings <- list(n_burnin = n_burnin, n_thin = n_thin, collapse = collapse, fit_indices = fit_indices, verbose = verbose)
+  structure(settings, class = "gibbs_control")
+}
+
+#' @rdname ecm_control
+#' @param x Settings from `ecm_control()` or `gibbs_control()`.
+#' @export
+print.ecm_control <- function(x, ...) {
+  print_control(x)
+}
+
+#' @rdname ecm_control
+#' @export
+print.gibbs_control <- function(x, ...) {
+  print_control(x)
+}
+
+print_control <- function(x) {
+  values <- vapply(unclass(x), function(v) if (is.null(v)) "NULL (default)" else paste(format(v), collapse = ", "), "")
+  cat(sprintf("%s()\n", class(x)[1]))
+  cat(sprintf("  %s = %s\n", names(values), values), sep = "")
+  invisible(x)
+}
+
+# names in ecm_control(...) / gibbs_control(...) that are not settings
+check_control_dots <- function(fun, dots) {
+  if (!length(dots)) {
+    return(invisible())
+  }
+  control_fun <- paste0(fun, "_control")
+  other <- if (fun == "ecm") "gibbs" else "ecm"
+  own_control <- setdiff(names(formals(engine_control(fun))), "...")
+  own_args <- setdiff(names(formals(engine_method(fun))), c("data", "...", "control"))
+  other_control <- setdiff(names(formals(engine_control(other))), c("...", own_control))
+  other_args <- setdiff(names(formals(engine_method(other))), c("data", "...", "control", own_args, own_control))
+  arg_names <- names(dots) %||% rep("", length(dots))
+  lines <- vapply(arg_names, function(name) {
+    if (!nzchar(name)) {
+      return(sprintf("unnamed value in %s(): name the settings, e.g. %s(%s = ...)", control_fun, control_fun, own_control[1]))
+    }
+    if (name %in% own_args) {
+      return(sprintf("%s is an argument of %s(), not a setting of %s(): %s(data, model = ..., %s = ...)", name, fun,
+                     control_fun, fun, name))
+    }
+    if (name %in% other_control) {
+      return(sprintf("%s is a setting of %s_control() for %s(), not of %s()", name, other, other, control_fun))
+    }
+    if (name %in% other_args) {
+      return(sprintf("%s is an argument of %s(), not a setting of %s()", name, other, control_fun))
+    }
+    guess <- closest_name(name, own_control)
+    if (is.null(guess)) {
+      sprintf("unknown setting %s of %s(); the settings are %s", name, control_fun, paste(own_control, collapse = ", "))
+    } else {
+      sprintf("unknown setting %s of %s(); did you mean %s?", name, control_fun, guess)
+    }
+  }, "")
+  stop(paste(lines, collapse = "\n"), call. = FALSE)
+}
+
+# control = of ecm() and gibbs(): settings of its own engine (a plain list goes through the
+# control function, which checks the names)
+as_control <- function(control, fun) {
+  control_fun <- paste0(fun, "_control")
+  other <- if (fun == "ecm") "gibbs" else "ecm"
+  if (inherits(control, control_fun)) {
+    return(control)
+  }
+  if (inherits(control, paste0(other, "_control"))) {
+    stop(sprintf("control = %s_control() holds the settings of %s(); %s() takes control = %s(...)", other, other, fun,
+                 control_fun), call. = FALSE)
+  }
+  if (is.list(control) && !is.object(control) && (!length(control) || !is.null(names(control)))) {
+    return(do.call(engine_control(fun), control))
+  }
+  stop(sprintf("control must come from %s(), e.g. %s(dat, model = \"cross\", control = %s(...))", control_fun, fun,
+               control_fun), call. = FALSE)
 }
 
 # ---- arguments that ecm() and gibbs() do not have ------------------------------------------------
@@ -206,9 +290,9 @@ check_dots <- function(fun, call, dots) {
   other <- if (fun == "ecm") "gibbs" else "ecm"
   control_fun <- paste0(fun, "_control")
   own_args <- setdiff(names(formals(engine_method(fun))), c("data", "..."))
-  own_control <- names(formals(engine_control(fun)))
+  own_control <- setdiff(names(formals(engine_control(fun))), "...")
   other_args <- setdiff(names(formals(engine_method(other))), c("data", "...", own_args, own_control))
-  other_control <- setdiff(names(formals(engine_control(other))), c(own_args, own_control))
+  other_control <- setdiff(names(formals(engine_control(other))), c("...", own_args, own_control))
   arg_names <- names(dots) %||% rep("", length(dots))
   values <- vapply(dots, function(v) paste(deparse(v, width.cutoff = 500L), collapse = " "), "")
   lines <- character()
@@ -274,6 +358,7 @@ ecm.input_data <- function(data, model = NULL, itemtype = "2pl", speed_var = c("
     stop("ecm() fits the normal models; quantile models use gibbs(data, model = ..., quantile = )", call. = FALSE)
   }
   check_dots("ecm", match.call(), match.call(expand.dots = FALSE)$...)
+  control <- as_control(control, "ecm")
   speed_var <- match.arg(speed_var)
   object <- build_model(data, model, itemtype, speed_var, cov)
   ecm.rtirt(object, max_iter = control$max_iter, tol = control$tol, nodes = control$nodes, se = se,
@@ -302,6 +387,7 @@ gibbs.input_data <- function(data, model = NULL, itemtype = "2pl", speed_var = c
                              cov = NULL, intercept = FALSE, priors = NULL, n_iter = 5000, n_chain = 4, seed = NULL,
                              init = "random", control = gibbs_control(), ...) {
   check_dots("gibbs", match.call(), match.call(expand.dots = FALSE)$...)
+  control <- as_control(control, "gibbs")
   speed_var <- match.arg(speed_var)
   object <- build_model(data, model, itemtype, speed_var, cov, quantile, intercept)
   if (inherits(init, "rtirt")) {

@@ -177,6 +177,26 @@ test_that("unknown arguments of ecm() and gibbs() are errors that show the right
   expect_equal(estimates(fit_old), estimates(fit_new))
 })
 
+test_that("control = takes the settings of its own engine; unknown settings name the closest one", {
+  dat <- small_data()
+  expect_s3_class(ecm_control(), "ecm_control")
+  expect_s3_class(gibbs_control(), "gibbs_control")
+  expect_error(gibbs(dat, model = "cross", n_iter = 20, n_chain = 1, control = ecm_control()),
+               "control = ecm_control\\(\\) holds the settings of ecm\\(\\); gibbs\\(\\) takes control = gibbs_control")
+  expect_error(ecm(dat, model = "cross", control = gibbs_control()),
+               "holds the settings of gibbs\\(\\); ecm\\(\\) takes control = ecm_control")
+  expect_error(gibbs_control(burnin = 50), "unknown setting burnin of gibbs_control\\(\\); did you mean n_burnin")
+  expect_error(gibbs_control(n_iter = 200), "n_iter is an argument of gibbs\\(\\), not a setting of gibbs_control")
+  expect_error(gibbs_control(nodes = 61), "nodes is a setting of ecm_control\\(\\)")
+  expect_error(ecm(dat, model = "cross", control = list(nodez = 61)), "did you mean nodes")
+  expect_error(ecm(dat, model = "cross", control = 61), "control must come from ecm_control")
+  # a plain list of settings still works, as before
+  fit_list <- ecm(dat, model = "cross", se = FALSE, control = list(nodes = 21))
+  fit_ctrl <- ecm(dat, model = "cross", se = FALSE, control = ecm_control(nodes = 21))
+  expect_equal(estimates(fit_list), estimates(fit_ctrl))
+  expect_output(print(gibbs_control(n_burnin = 500)), "n_burnin = 500")
+})
+
 test_that("gibbs() refuses quantile = for models without a quantile version, as ecm() does", {
   dat <- small_data("latent", n_feat = 1)
   for (model in c("null", "latreg", "irt")) {
