@@ -265,6 +265,11 @@ gibbs_rtirt <- function(model, n_iter = NULL, n_chain = NULL, n_burnin = NULL, n
     stop("collapse must be TRUE or FALSE", call. = FALSE)
   }
   priors <- priors %||% rtirt_priors()
+  if (is.character(priors)) {
+    # prior = "map" of ecm() reaches here through partial matching of priors =
+    stop("priors must come from rtirt_priors(); prior = \"ml\" or \"map\" is a setting of ecm(): ",
+         "gibbs() always samples the posterior under the priors of rtirt_priors()", call. = FALSE)
+  }
   if (!inherits(priors, "rtirt_priors")) {
     stop("priors must come from rtirt_priors()", call. = FALSE)
   }
