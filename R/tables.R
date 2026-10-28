@@ -202,7 +202,7 @@ fit_line <- function(x, cond) {
     method <- if (fit$map) "marginal posterior mode (item priors of gibbs())" else "maximum marginal likelihood"
     converged <- if (fit$converged) "" else " (not converged)"
     return(sprintf("  %s (ECM, %d Gauss-Hermite nodes): %d iterations%s, %.1f s",
-                   method, fit$Q, fit$iterations, converged, fit$secs))
+                   method, fit$nodes, fit$iterations, converged, fit$secs))
   }
   sampler <- if (isTRUE(x$post$settings$collapse)) "Gibbs (partially collapsed)" else "Gibbs"
   sprintf("  %s: %d chains x %d iterations (burn-in %d, thin %d); %.1f s",

@@ -45,7 +45,11 @@ chains with different variances or poorly mixing tails; the table then has \code
 \description{
 \code{estimates()} returns the posterior summary of the item and structural parameters as a
 data frame: posterior mean (\code{est}), \code{sd}, 2.5\% and 97.5\% quantiles (\code{q025}, \code{q975}), R-hat and effective sample size (after
-burn-in, over the independent chains); \code{sig = "*"} when the 95\% interval excludes 0.
+burn-in, over the independent chains); \code{sig = "*"} when the 95\% interval excludes 0. \code{sig}
+is given only for parameters where 0 is a meaningful value: difficulties \code{b}, regression
+coefficients \code{beta}, cross-relations \code{rho}, \code{cor_ability_speed} and \code{b_ability}. It is \code{NA}
+for discriminations, variances (\code{sigma2t}, \code{var_speed}), which are positive and whose
+intervals never contain 0, and time intensities \code{lambda}.
 \code{precis()} (the Julia name) prints the same table. \code{coef()} returns the posterior means
 as a named vector. For a model fitted by \code{\link[=ecm]{ecm()}} the table has the maximum likelihood
 estimates with standard errors (\code{est}, \code{se}, \code{z}, Wald 95\% interval \code{q025}, \code{q975}).

@@ -34,6 +34,13 @@
 #' fit_gibbs <- gibbs(dat, model = "cross", init = fit_ecm)
 #' ```
 #'
+#' **Small samples.** `print()` and `summary()` warn when the estimates suggest that the data
+#' are too few for maximum likelihood: a difficulty with |b| > 6, a discrimination below 0.1
+#' or above 10, or a standard error above 5 (or missing) for a, b or rho. These thresholds
+#' flag only clearly broken fits (with ability N(0, 1), |b| > 6 means almost everyone or no
+#' one solves the item, and an SE of 5 a 95% interval about 20 wide); `prior = "map"` or
+#' [gibbs()] regularize such fits.
+#'
 #' @param data Data from [input_data()].
 #' @param model The model by name: `"irt"`, `"null"`, `"latreg"`, `"latent"`, `"cross"` or
 #'   `"mixture"` (not available yet); see [gibbs()].
@@ -610,7 +617,7 @@ em_table <- function(x, V, E) {
   zv <- est / se
   tab <- data.frame(
     parameter = nm, est = unname(est), se = unname(se), z = unname(zv), q025 = unname(lo), q975 = unname(hi),
-    sig = ifelse(!is.na(lo) & (lo > 0 | hi < 0), "*", ""), row.names = NULL
+    sig = sig_flag(nm, lo, hi), row.names = NULL
   )
   attr(tab, "vcov") <- Vr
   tab
@@ -698,7 +705,41 @@ print_em <- function(x) {
   }
   rel <- reliability(x)
   cat(sprintf("  Reliability: %s\n", paste(sprintf("%s %.3f", names(rel), rel), collapse = ", ")))
+  extreme <- ecm_extreme_warning(x)
+  if (length(extreme)) {
+    cat(extreme, "\n", sep = "")
+  }
   cat("Use summary(), coef(), scores(), estimates(), fit_indices(); gibbs(data, model = ..., init = fit) to sample from here.\n")
+}
+
+# Estimates that say the data are too few for maximum likelihood (the N = 40 fit with b = -34.1,
+# SE 4105). Thresholds, chosen to flag only the clearly broken cases: |b| > 6 (with ability
+# N(0, 1) almost everyone, or no one, solves the item), a < 0.1 or a > 10 (an item without
+# information, or a step function), and a standard error above 5 (or none) for a, b or rho
+# (a 95% interval wider than 20 on the logit or correlation scale). Empty when none.
+ecm_extreme_warning <- function(x) {
+  e <- x$ecm$estimates
+  name <- e$parameter
+  is_a <- startsWith(name, "a[") & !identical(x$settings$itemtype, "1pl")
+  is_b <- startsWith(name, "b[")
+  extreme <- (is_b & abs(e$est) > 6) | (is_a & (e$est < 0.1 | e$est > 10))
+  has_se <- !is.null(x$ecm$vcov)
+  with_se <- is_a | is_b | startsWith(name, "rho[")
+  wild_se <- has_se & with_se & (is.na(e$se) | e$se > 5)
+  flagged <- which(extreme | wild_se)
+  if (!length(flagged)) {
+    return(character())
+  }
+  se_text <- if (has_se) sprintf(", SE %s", format_number(e$se[flagged])) else ""
+  shown <- sprintf("%s = %s%s", name[flagged], format_number(e$est[flagged]), se_text)
+  more <- if (length(shown) > 3) sprintf(" and %d more", length(shown) - 3) else ""
+  remedy <- if (isTRUE(x$ecm$map)) "gibbs() or fewer items" else "ecm(..., prior = \"map\") or gibbs()"
+  sprintf("  Warning: extreme estimates or standard errors (%s%s): the sample may be too small for maximum likelihood; try %s",
+          paste(utils::head(shown, 3), collapse = "; "), more, remedy)
+}
+
+format_number <- function(v) {
+  ifelse(is.na(v), "NA", formatC(v, digits = 3, format = "fg"))
 }
 
 #' @export
@@ -728,7 +769,7 @@ summary_em <- function(object, digits) {
   w <- rtirt_item_wide(p, object$data$items)
   structure(
     list(
-      header = rtirt_header(object),
+      header = c(rtirt_header(object), ecm_extreme_warning(object)),
       fit = rtable(fit_indices(object), "marginal likelihood (persons integrated out)"),
       items = rtable(w$est, "item parameters (ECM estimates)"),
       se = rtable(w$se, "standard errors of the item parameters"),

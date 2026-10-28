@@ -74,6 +74,13 @@ the item parameters carry the location). The fit starts the Gibbs sampler:
 \if{html}{\out{<div class="sourceCode">}}\preformatted{fit_ecm <- ecm(dat, model = "cross")
 fit_gibbs <- gibbs(dat, model = "cross", init = fit_ecm)
 }\if{html}{\out{</div>}}
+
+\strong{Small samples.} \code{print()} and \code{summary()} warn when the estimates suggest that the data
+are too few for maximum likelihood: a difficulty with |b| > 6, a discrimination below 0.1
+or above 10, or a standard error above 5 (or missing) for a, b or rho. These thresholds
+flag only clearly broken fits (with ability N(0, 1), |b| > 6 means almost everyone or no
+one solves the item, and an SE of 5 a 95\% interval about 20 wide); \code{prior = "map"} or
+\code{\link[=gibbs]{gibbs()}} regularize such fits.
 }
 \examples{
 cond <- set_cond(n_subj = 300, n_item = 8)

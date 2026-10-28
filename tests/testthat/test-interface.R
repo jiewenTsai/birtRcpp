@@ -186,3 +186,35 @@ test_that("print() of a Gibbs fit warns with the criteria of convergence(); conv
   expect_output(print(check_q), "q = 0.75: ")
   expect_match(paste(capture.output(print(levels)), collapse = "\n"), "Warning (q = 0.25): only", fixed = TRUE)
 })
+
+test_that("sig marks only parameters where 0 is a meaningful value", {
+  dat <- small_data("latreg", n_feat = 1)
+  fit <- ecm(dat, model = "latreg")
+  e <- estimates(fit)
+  tested <- grepl("^(b|beta_ability|beta_speed)\\[", e$parameter) | e$parameter == "cor_ability_speed"
+  expect_true(all(is.na(e$sig[!tested])))                          # a, lambda, sigma2t, var_speed
+  expect_true(all(e$sig[tested] %in% c("", "*")))
+  expect_true(all(is.na(e$sig[grepl("^a\\[", e$parameter)])))
+  g <- gibbs(dat, model = "latreg", n_iter = 60, n_chain = 1, seed = 1,
+             control = gibbs_control(verbose = FALSE, fit_indices = FALSE))
+  eg <- estimates(g)
+  expect_identical(is.na(eg$sig), !(grepl("^(b|beta_ability|beta_speed)\\[", eg$parameter) | eg$parameter == "cor_ability_speed"))
+  cross <- estimates(ecm(small_data(), model = "cross", se = TRUE))
+  expect_true(all(cross$sig[startsWith(cross$parameter, "rho[")] %in% c("", "*")))
+})
+
+test_that("ECM fits with extreme estimates or standard errors warn in print() and summary()", {
+  set.seed(9)
+  cond <- set_cond(n_subj = 40, n_item = 10)
+  small <- sim_data(cond, sim_para(cond, "cross"), "cross")
+  fit <- ecm(small, model = "cross")                                 # b[item02] = -34, SE 4105
+  printed <- paste(capture.output(print(fit)), collapse = "\n")
+  expect_match(printed, "Warning: extreme estimates or standard errors (", fixed = TRUE)
+  expect_match(printed, "b[item02] = -34.1", fixed = TRUE)
+  expect_match(printed, "try ecm(..., prior = \"map\") or gibbs()", fixed = TRUE)
+  expect_true(any(grepl("extreme estimates", summary(fit)$header)))
+  expect_true(any(grepl("ECM, 41 Gauss-Hermite nodes", summary(fit)$header)))   # the method line of the summary
+  map <- ecm(small, model = "cross", prior = "map")
+  expect_false(grepl("extreme", paste(capture.output(print(map)), collapse = "\n")))
+  expect_false(grepl("extreme", paste(capture.output(print(ecm(small_data(), model = "cross"))), collapse = "\n")))
+})

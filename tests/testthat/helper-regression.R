@@ -235,8 +235,12 @@ max_table_diff <- function(new, old) {
   max(diffs, 0)
 }
 
-# the character columns must agree exactly
+# the character columns must agree exactly; `sig` is NA (by design, after the fixture was made)
+# for the parameters where 0 is not a meaningful value (a, lambda, variances)
 expect_same_labels <- function(new, old, label) {
+  if (all(c("sig", "parameter") %in% names(old)) && identical(old$parameter, new$parameter)) {
+    old$sig[is.na(new$sig) & !zero_null(old$parameter)] <- NA
+  }
   is_chr <- !vapply(old, is.numeric, logical(1))
   expect_identical(names(new), names(old), label = paste(label, "column names"))
   expect_identical(new[is_chr], old[is_chr], label = paste(label, "labels"))

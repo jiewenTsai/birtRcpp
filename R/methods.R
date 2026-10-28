@@ -73,7 +73,11 @@ post_mcmc <- function(x) {
 #'
 #' `estimates()` returns the posterior summary of the item and structural parameters as a
 #' data frame: posterior mean (`est`), `sd`, 2.5% and 97.5% quantiles (`q025`, `q975`), R-hat and effective sample size (after
-#' burn-in, over the independent chains); `sig = "*"` when the 95% interval excludes 0.
+#' burn-in, over the independent chains); `sig = "*"` when the 95% interval excludes 0. `sig`
+#' is given only for parameters where 0 is a meaningful value: difficulties `b`, regression
+#' coefficients `beta`, cross-relations `rho`, `cor_ability_speed` and `b_ability`. It is `NA`
+#' for discriminations, variances (`sigma2t`, `var_speed`), which are positive and whose
+#' intervals never contain 0, and time intensities `lambda`.
 #' `precis()` (the Julia name) prints the same table. `coef()` returns the posterior means
 #' as a named vector. For a model fitted by [ecm()] the table has the maximum likelihood
 #' estimates with standard errors (`est`, `se`, `z`, Wald 95% interval `q025`, `q975`).
@@ -145,8 +149,22 @@ estimates_rtirt <- function(object, pars, method, diagnostics) {
     ess <- tryCatch(coda::effectiveSize(chains), error = function(e) rep(NA_real_, ncol(draws)))
     table$ess <- as.integer(round(ess))
   }
-  table$sig <- ifelse(interval[1, ] > 0 | interval[2, ] < 0, "*", "")
+  table$sig <- sig_flag(table$parameter, interval[1, ], interval[2, ])
   table
+}
+
+# `sig` of estimates(): "*" when the 95% interval excludes 0, for the parameters where 0 is a
+# meaningful value (difficulties, regression coefficients, cross-relations, the correlation);
+# NA for the others: discriminations and variances are positive (their intervals, on the log
+# scale, never contain 0) and a time intensity of 0 (one second) is no hypothesis
+zero_null <- function(parameter) {
+  grepl("^(b|beta|beta_ability|beta_speed|rho)\\[", parameter) | parameter %in% c("cor_ability_speed", "b_ability")
+}
+
+sig_flag <- function(parameter, lower, upper) {
+  flag <- ifelse(!is.na(lower) & (lower > 0 | upper < 0), "*", "")
+  flag[!zero_null(parameter)] <- NA_character_
+  flag
 }
 
 # Gelman-Rubin R-hat of the parameters that vary (NA otherwise, and with one chain)
