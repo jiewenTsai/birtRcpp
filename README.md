@@ -58,8 +58,8 @@ fit
 ```
 model = "cross" (rtirt_cross)
   500 persons x 10 items
-  maximum marginal likelihood (ECM, 41 Gauss-Hermite nodes): 14 iterations, 0.8 s
-  logLik -8309.032, npar 51, AIC 16720.1, BIC 16935.0
+  maximum marginal likelihood (ECM, 41 Gauss-Hermite nodes): 14 iterations, 0.2 s
+  logLik -8309.032, npar 51, AIC 16720.064, BIC 16935.009
   Reliability: ability 0.746, speed 0.975
 Use summary(), coef(), scores(), estimates(), fit_indices(); gibbs(data, model = ..., init = fit) to sample from here.
 ```
@@ -84,11 +84,15 @@ head(scores(fit), 3)             # EAP and posterior SD of ability and speed, wi
 ```
 
 ```
-    id    ability ability_psd      speed speed_psd
-1 P001 -0.1256462   0.4866794  0.4730123 0.1705656
-2 P002 -0.7703921   0.4939586  0.1401154 0.1705812
-3 P003 -0.4035749   0.4872747 -1.1086617 0.1705668
+# A tibble: 3 x 5
+id    ability  ability_psd   speed  speed_psd
+P001   -0.126        0.487   0.473      0.171
+P002   -0.770        0.494   0.140      0.171
+P003   -0.404        0.487  -1.109      0.171
 ```
+
+Tables print with 3 decimals (counts without decimals, p-values below 0.001 as `<0.001`); the
+values themselves keep full precision (`scores(fit)$ability`, `as.data.frame()`, dplyr).
 
 `input_data()` takes matrices or column names of a data frame; `time` is in seconds (the package
 takes the log; use `log_time =` for logged times), `cov` gives centred covariates. It checks the
@@ -106,9 +110,9 @@ is enough.
 ```r
 f0 <- ecm(dat, model = "null")                   # nested: equal rho for every item
 anova(f0, fit)                                   # npar, logLik, AIC, BIC, LR test
-#>     npar    logLik      AIC      BIC   Chisq Df Pr(>Chisq)    
-#> f0    42 -8458.130 17000.26 17177.27                          
-#> fit   51 -8309.032 16720.06 16935.01 298.196  9 < 2.22e-16 ***
+#>      npar     logLik        AIC        BIC    Chisq  Df  Pr(>Chisq)
+#> f0     42  -8458.130  17000.260  17177.274
+#> fit    51  -8309.032  16720.064  16935.009  298.196   9      <0.001  ***
 
 g <- gibbs(dat, model = "cross", init = fit, n_iter = 2000, n_chain = 3, seed = 1)
 g
@@ -117,10 +121,10 @@ g
 ```
 model = "cross" (rtirt_cross)
   500 persons x 10 items
-  3 chains x 2000 iterations (burn-in 1000, thin 1); 9.9 s
+  3 chains x 2000 iterations (burn-in 1000, thin 1); 4.2 s
   Reliability: ability 0.738, speed 0.970
-  Marginal: DIC 16720.6 (pD 51.1), WAIC 16721.3, LOOIC 16722.1
-  Warning: only 98.0% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.02, min ESS 318); run longer (n_iter) or see convergence()
+  Marginal: DIC 16720.571 (pD 51.053), WAIC 16721.320, LOOIC 16722.056
+  Warning: only 98.0% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.021, min ESS 318); run longer (n_iter) or see convergence()
 Use summary(), coef(), scores(), estimates(), convergence(), fit_indices(), plot().
 ```
 
@@ -135,10 +139,11 @@ estimates(g, pars = "^rho")[1:3, ]     # posterior mean, SD, 95% interval, R-hat
 ```
 
 ```
-  parameter         est         sd        q025       q975     rhat  ess sig
-1   rho[q1] -0.09431272 0.06152600 -0.21575375 0.02345701 1.000269 1717    
-2   rho[q2]  0.07573443 0.06194121 -0.04765377 0.19324590 1.001074 1765    
-3   rho[q3]  0.16385389 0.06161725  0.04517955 0.28550189 1.002219 1666   *
+# A tibble: 3 x 8
+parameter     est     sd    q025   q975   rhat   ess  sig
+rho[q1]    -0.094  0.062  -0.216  0.023  1.000  1717
+rho[q2]     0.076  0.062  -0.048  0.193  1.001  1765
+rho[q3]     0.164  0.062   0.045  0.286  1.002  1666  *
 ```
 
 ```r
@@ -233,9 +238,9 @@ rho[q3]     0.209   0.193   0.287
 rho[q4]    -0.051   0.044   0.099
 rho[q5]     0.352   0.348   0.442
 ...
-  Warning (q = 0.1): only 39.2% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.12, min ESS 54); run longer (n_iter) or see convergence()
-  Warning (q = 0.5): only 88.2% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.06, min ESS 253); run longer (n_iter) or see convergence()
-  Warning (q = 0.9): only 41.2% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.03, min ESS 110); run longer (n_iter) or see convergence()
+  Warning (q = 0.1): only 39.2% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.118, min ESS 54); run longer (n_iter) or see convergence()
+  Warning (q = 0.5): only 88.2% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.057, min ESS 253); run longer (n_iter) or see convergence()
+  Warning (q = 0.9): only 41.2% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.026, min ESS 110); run longer (n_iter) or see convergence()
 ```
 
 The chains here are short for the sake of the example (the defaults are `n_iter = 5000`,
@@ -293,14 +298,14 @@ fit_e
 ```
 
 ```
-ECM for the declared model: converged after 18 iterations (2 rounds of the grid), log posterior -2408.0951
- parameter    est     se
-      a[1]  0.500 0.1357
-      a[2]  0.794 0.1653
-      a[3]  0.939 0.1675
+ECM for the declared model: converged after 18 iterations (2 rounds of the grid), log posterior -2408.095
+parameter     est     se
+a[1]        0.500  0.136
+a[2]        0.794  0.165
+a[3]        0.939  0.168
 ...
-      b[9]  1.849 0.1911
-     b[10]  2.527 0.3394
+b[9]        1.849  0.191
+b[10]       2.527  0.339
 ```
 
 The three engines on the discriminations (`true` is the simulated value):
@@ -329,10 +334,13 @@ ECM check (10 starting values): all checks passed
                                                                             check    worst limit passed
                                         each step raises Q(. | x) (relative drop) 0.00e+00 1e-08   TRUE
                          one iteration never lowers the objective (relative drop) 0.00e+00 1e-08   TRUE
- Fisher identity: gradient of the objective = gradient of Q (relative difference) 1.09e-10 1e-04   TRUE
-                   ECM stops at a maximum: gain of a general optimizer (relative) 1.53e-14 1e-06   TRUE
-                                       ECM stops at a maximum: largest |gradient| 7.86e-05 1e-02   TRUE
+ Fisher identity: gradient of the objective = gradient of Q (relative difference) 7.16e-09 1e-04   TRUE
+                   ECM stops at a maximum: gain of a general optimizer (relative) 1.13e-15 1e-06   TRUE
+                                       ECM stops at a maximum: largest |gradient| 8.94e-06 1e-02   TRUE
 ```
+
+The tolerances of these checks (`worst`, `limit`) stay in scientific notation; every other
+table prints 3 decimals.
 
 A declared response-time model reproduces the built-in one. Speed enters only normal parts
 linearly, so `ecm()` integrates it exactly and uses quadrature for ability alone:
@@ -366,19 +374,19 @@ score_test(fit, group, by_item = TRUE)    # score-based test of parameter invari
 
 ```
 Score-based test of parameter invariance (LM test, factor with 2 levels moderator, block decorrelation)
- parameters  n statistic p.value p.holm
-   accuracy 20    15.458   0.750       
-         q1  2     1.189   0.552      1
-         q2  2     2.282   0.319      1
+parameters   n  statistic  p.value  p.holm
+accuracy    20     25.072    0.199
+q1           2      2.747    0.253   1.000
+q2           2      0.317    0.853   1.000
 ...
 ```
 
 ```r
 ci_test(fit)                              # conditional independence of responses and times (LM test)
 #> Conditional independence of responses and response times (van der Linden & Glas, 2010)
-#>   all items: LM = 13.22, df = 10, p = 0.211
+#>   all items: LM = 13.224, df = 10, p = 0.211
 person_fit(g)                             # response-time person fit (Marianti et al., 2014), from a Gibbs fit
-preknowledge_test(fit, compromised = c("q1", "q2"))   # item preknowledge statistics (Sinharay, 2020)
+preknowledge_test(f0, compromised = c("q1", "q2"))    # item preknowledge (Sinharay, 2020); a fit of "null", "latreg" or "latent"
 ```
 
 `score_test()` also returns the casewise scores through `estfun()`, so the fit can go straight

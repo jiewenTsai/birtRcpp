@@ -77,8 +77,11 @@ fit <- ecm(dat, model = "latent")
 fit
 estimates(fit, pars = "beta|b_ability") # est, se, z, Wald 95% interval
 head(scores(fit)) # EAP and posterior SD of ability and speed
-c(logLik = logLik(fit), AIC = AIC(fit), BIC = BIC(fit))
+fit_indices(fit) # logLik, npar, N, AIC, BIC (also logLik(fit), AIC(fit), BIC(fit))
 ```
+
+Tables print with 3 decimals (counts without decimals, p-values below 0.001 as `<0.001`);
+the values keep full precision: `estimates(fit)$est`, `as.data.frame(estimates(fit))`.
 
 `anova()` compares fits of the same data: AIC and BIC, and for nested models a
 likelihood-ratio test; `model = "null"` is `model = "latreg"` without covariates (it leaves

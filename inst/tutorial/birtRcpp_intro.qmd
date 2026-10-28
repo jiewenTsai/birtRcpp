@@ -402,7 +402,7 @@ print(s, tables = c("fit", "parameters"))
   - 欄位是估計方法 `method`（ECM）、logLik、參數個數 `npar`、人數 `N`、AIC、BIC。
 - `$parameters`：依參數類別分段，例如 Discrimination (a)、Difficulty (b)、Time intensity (lambda)、Residual variance of log RT (sigma2t)、Cross-relation (rho)。
   - `Estimate`：最大概似估計值；`Std.Err`：標準誤。
-  - `z-value` = Estimate / Std.Err；`P(>|z|)`：「參數等於 0」的雙尾 p 值。印成 0.000 表示小於 .0005。
+  - `z-value` = Estimate / Std.Err；`P(>|z|)`：「參數等於 0」的雙尾 p 值。印成 `<0.001` 表示小於 0.001。
   - `ci.lower`、`ci.upper`：Wald 95% 區間。
 - `$parameters` 的標題說：a、sigma2t、var_speed 的區間是在 log 尺度上算，再轉回來。所以這些區間不對稱，也不會出現負值。
 - 標題裡的 `Fisher-z for the correlation` 是給「相關」用的轉換。這個模型沒有相關，所以用不到。
@@ -425,7 +425,8 @@ reliability(fit)
 **輸出怎麼讀**
 
 - `estimates()`：
-  - 表格是 tibble，最左邊的 1、2、3 是挑出來之後重新編的列號，不是在完整參數表裡的位置；
+  - 表格是 tibble（一種資料框）。第一行 `# A tibble: 3 x 7` 是說這張表有 3 列、7 欄；
+  - 所有的表都印到小數 3 位，但存的是完整的值：`estimates(fit)$est` 取出來的數字沒有四捨五入；
   - `parameter` 是參數名稱，方括號裡是題名；
   - `est` 估計值、`se` 標準誤、`z` 是 z 值；
   - `q025` 與 `q975` 是 Wald 95% 區間的兩端，也就是 est ± 1.96 × se。名字借自 Gibbs 的 2.5 與 97.5 百分位數（第 5 節）；
@@ -435,7 +436,7 @@ reliability(fit)
   - `ability`、`speed` 是 EAP；`ability_psd`、`speed_psd` 是 PSD；
   - 例如 ID 5001：能力約 0.85（PSD 0.50），速度約 −0.12（PSD 0.18）；
   - 速度的 PSD 比能力小很多。這就是速度的信度比較高的原因。
-- `reliability()`：能力 0.751、速度 0.966，和 `fit` 摘要裡的 Reliability 相同（多印幾位小數）。
+- `reliability()`：能力 0.751、速度 0.966，和 `fit` 摘要裡的 Reliability 相同。
 
 **`pars` 的文字樣式**（正規表示式）只要會這幾個符號：
 
@@ -464,8 +465,8 @@ anova(f0, fit)
 
 - 最上面列出每一列是哪個模型（`f0` 是 `model = "null"`，`fit` 是 `model = "cross"`）。表格依參數個數由少到多排列。
 - `npar`：參數個數。`null` 少了 10 個 ρ，多了 1 個能力與速度的相關，所以少 9 個參數（42 對 51）。
-- `logLik`：對數概似。`cross` 的 logLik 大很多（−9946.6 對 −10121.0）。
-- `AIC`、`BIC`：`cross` 的 AIC（19995 對 20326）、BIC（20219 對 20511）都比較小。所以交叉關係模型比較好。AIC、BIC 不需要巢套，任何同一份資料的模型都能比。
+- `logLik`：對數概似。`cross` 的 logLik 大很多（−9946.565 對 −10120.968）。
+- `AIC`、`BIC`：`cross` 的 AIC（19995.130 對 20325.936）、BIC（20219.374 對 20510.607）都比較小。所以交叉關係模型比較好。AIC、BIC 不需要巢套，任何同一份資料的模型都能比。
 - `Chisq`、`Df`、`Pr(>Chisq)`：概似比檢定，下面解釋。
 
 **概似比檢定**
@@ -475,9 +476,9 @@ anova(f0, fit)
 - 這種「一個模型是另一個模型加上限制」的關係叫**巢套**（nested）。巢套的兩個模型可以做概似比檢定。
 - 這裡檢定的是：「各題的 ρ 都一樣」這個限制成不成立。
 - `anova()` 算的是：
-  - `Chisq`：概似比統計量 LR = 2 ×（大模型的 logLik − 小模型的 logLik），約 348.8；
+  - `Chisq`：概似比統計量 LR = 2 ×（大模型的 logLik − 小模型的 logLik），348.806；
   - `Df`：自由度 = 兩個模型的參數個數差，9；
-  - `Pr(>Chisq)`：卡方分配的右尾機率，就是 p 值。`< 2.22e-16` 表示比 2.22 × 10⁻¹⁶ 還小（R 能分辨的最小差距），也就是非常接近 0。後面的 `***` 是顯著性標記（最下面一行 `Signif. codes` 是對照表）。
+  - `Pr(>Chisq)`：卡方分配的右尾機率，就是 p 值。`<0.001` 表示 p 值小於 0.001（p 值都印到小數 3 位，更小的就印成 `<0.001`），也就是非常接近 0。後面的 `***` 是顯著性標記（最下面一行 `Signif. codes` 是對照表）。
 - 所以「各題的 ρ 都一樣」不成立：能力影響作答時間的方向和大小，題目之間不同。
 - `anova()` 只檢查兩個模型是不是同一份資料，不會檢查是不是巢套；不巢套的模型請只看 AIC、BIC。參數比較多、logLik 卻比較小時，`anova()` 會警告。
 
@@ -509,7 +510,7 @@ equations(fit)
 rho_true <- attr(sim, "true_para")$rho
 rho_ecm <- estimates(fit, pars = "^rho")$est
 round(cbind(true = rho_true, ecm = rho_ecm), 3)
-c(bias = mean(rho_ecm - rho_true), rmse = sqrt(mean((rho_ecm - rho_true)^2)))
+round(c(bias = mean(rho_ecm - rho_true), rmse = sqrt(mean((rho_ecm - rho_true)^2))), 3)
 ```
 
 **逐行說明**
@@ -517,7 +518,7 @@ c(bias = mean(rho_ecm - rho_true), rmse = sqrt(mean((rho_ecm - rho_true)^2)))
 1. `attr(sim, "true_para")`：取出真值。`$rho` 是 10 題的 ρ。
 2. ECM 估計的 ρ。
 3. 並排，取到小數 3 位。
-4. `bias`：平均偏誤。`rmse`：均方根誤差。
+4. `bias`：平均偏誤。`rmse`：均方根誤差。一樣取到小數 3 位。
 
 **輸出怎麼讀**
 
@@ -587,8 +588,8 @@ g
 - `Reliability`：用後驗算的信度。能力 0.745、速度 0.962，和 ECM 的 0.751、0.966 很接近。
 - `Marginal`：三種貝氏的模型比較指標（DIC、WAIC、LOOIC）。
   - 用法和 AIC 一樣，愈小愈好。
-  - 這裡 DIC 是 19994.8，和 ECM 的 AIC 19995.1 幾乎一樣。
-  - 括號裡的 `pD` 是「有效參數個數」，這裡 50.7，和 `npar` 51 差不多。
+  - 這裡 DIC 是 19994.783，和 ECM 的 AIC 19995.130 幾乎一樣。
+  - 括號裡的 `pD` 是「有效參數個數」，這裡 50.697，和 `npar` 51 差不多。
 - 最後一行列出可以用的函數。
 - 如果有參數沒有達到 `convergence()` 的標準（ESS > 400 而且 R̂ < 1.05），或只跑了一條鏈（算不出 R̂），這裡會多一行 `Warning`。這次有一行：51 個參數裡只有 98.0% 過關（下面的 `convergence()` 會列出是哪一個）。教學為了快只跑 2000 次；正式分析把 `n_iter` 加大，警告就會消失。沒有警告，才表示每個參數都過了這個標準。
 
@@ -802,9 +803,9 @@ anova(e0, ej)
 
 **輸出怎麼讀**
 
-- `Chisq`：LR 約 322.9。
+- `Chisq`：LR 是 322.861。
 - `Df`：自由度是 4：能力 2 個、速度 2 個迴歸係數。
-- `Pr(>Chisq)`：p 值非常接近 0（`< 2.22e-16`）。表示共變項有用。
+- `Pr(>Chisq)`：p 值非常接近 0（`<0.001`）。表示共變項有用。
 
 **用 Gibbs 確認**
 
@@ -1018,14 +1019,14 @@ print(score_test(fit, rbinom(nrow(dat$Y), 1, 0.5) == 1))
 ```{r rt-tests}
 pf <- person_fit(g)
 head(pf, 3)
-attr(pf, "share")
+round(attr(pf, "share"), 3)
 ```
 
 **逐行說明**
 
 1. `person_fit(g)`：每個人的作答時間適配統計量 $l^t$（Marianti et al., 2014）。
 2. 看前 3 人。
-3. 被判為不適配的比例。
+3. 被判為不適配的比例，取到小數 3 位。
 
 **輸出怎麼讀**
 
@@ -1036,7 +1037,7 @@ attr(pf, "share")
   - `p_flag`：「這個人不適配」的後驗機率，也就是 lt 超過卡方分配 95 百分位數（自由度 10 時約 18.3）的機率；
   - `flagged`：`p_flag` ≥ .95，也就是被判為不適配。
 - 前 3 人的 lt 是 11.9、7.1、7.5，都不大。`p_flag` 都接近 0，所以 `flagged` 都是 `FALSE`。
-- 最後一行是被判為不適配的人占多少比例：0.0133，也就是 1.3%（600 人中 8 人）。資料是照模型模擬的，所以比例很小。
+- 最後一行是被判為不適配的人占多少比例：0.013，也就是 1.3%（600 人中 8 人）。資料是照模型模擬的，所以比例很小。
 
 不適配可能表示亂猜、事先看過題目、時間不夠，或作答速度中途改變。
 
@@ -1056,7 +1057,7 @@ one_rep <- function(r) {
   c(bias = mean(est - tpS$rho), rmse = sqrt(mean((est - tpS$rho)^2)))
 }
 res_ecm <- t(sapply(1:20, one_rep))
-colMeans(res_ecm)
+round(colMeans(res_ecm), 3)
 ```
 
 **逐行說明**
@@ -1070,7 +1071,7 @@ colMeans(res_ecm)
 7. 回傳這一次的平均偏誤與均方根誤差。
 8. 函數結束。
 9. `sapply(1:20, one_rep)`：做 20 次。`t()` 轉成一列一次重複。
-10. `colMeans()`：20 次的平均。
+10. `colMeans()`：20 次的平均；`round(..., 3)` 取到小數 3 位。
 
 **輸出怎麼讀**
 
@@ -1085,7 +1086,7 @@ colMeans(res_ecm)
 ```{r simulation}
 condG <- set_cond(n_subj = 400, n_item = 8, n_iter = 1200, n_chain = 2, n_rep = 3)
 res <- run_simulation(condG, tpS, "cross", pars = c("a", "rho", "ability"))
-aggregate(cbind(bias, rmse, corr) ~ par, data = res, FUN = mean)
+aggregate(cbind(bias, rmse, corr) ~ par, data = res, FUN = function(x) round(mean(x), 3))
 ```
 
 **逐行說明**
@@ -1096,7 +1097,7 @@ aggregate(cbind(bias, rmse, corr) ~ par, data = res, FUN = mean)
    - 結果 `res` 是一個資料框：每次重複、每種參數各一列，欄位有 `rep`（第幾次）、`par`、`bias`、`rmse`、`corr` 等。
 3. `aggregate()`：把 3 次重複平均起來。
    - `cbind(bias, rmse, corr) ~ par` 的意思是：依 `par` 分組，對 `bias`、`rmse`、`corr` 三欄做計算；
-   - `FUN = mean`：計算的方式是平均。
+   - `FUN = function(x) round(mean(x), 3)`：計算的方式是平均，再取到小數 3 位。`function(x) ...` 是當場寫的一個小函數。
 
 **輸出怎麼讀**
 
