@@ -121,6 +121,9 @@ gibbs_control <- function(n_burnin = NULL, n_thin = 1, collapse = FALSE, fit_ind
 ecm.input_data <- function(data, model = NULL, itemtype = "2pl", speed_var = c("free", "fixed"), cov = NULL,
                            prior = c("ml", "map"), priors = NULL, se = TRUE, control = ecm_control(), ...) {
   speed_var <- match.arg(speed_var)
+  if ("quantile" %in% names(list(...))) {
+    stop("ecm() fits the normal models; quantile models use gibbs(data, model = ..., quantile = )", call. = FALSE)
+  }
   object <- build_model(data, model, itemtype, speed_var, cov)
   ecm.rtirt(object, max_iter = control$max_iter, tol = control$tol, nodes = control$nodes, se = se,
             prior = prior, priors = priors, accelerate = control$accelerate, verbose = control$verbose, ...)

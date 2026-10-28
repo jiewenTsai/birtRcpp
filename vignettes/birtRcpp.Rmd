@@ -18,13 +18,15 @@ model, starting from the ECM solution. Both are written in C++. The package port
 package ExtendedRtIrtModeling.jl, with corrected full conditionals. Notation: j indexes
 persons, i items.
 
-| constructor | model |
+The model is named by `model =` in `ecm()` and `gibbs()`:
+
+| `model` | model |
 |---|---|
-| `mlirt()` | 2PL (or 1PL) with a latent regression of ability |
-| `rtirt_null()` | 2PL + log-normal response times (van der Linden, 2007) |
-| `rtirt_latreg()` | ... with latent regressions of ability and speed |
-| `rtirt_latent()` | speed regressed on ability and covariates; `quantile =` for quantile regression |
-| `rtirt_cross()` | cross-relations of ability with each log response time; `quantile =` |
+| `"irt"` | 2PL (or 1PL, `itemtype = "1pl"`) with a latent regression of ability |
+| `"null"` | 2PL + log-normal response times (van der Linden, 2007) |
+| `"latreg"` | ... with latent regressions of ability and speed |
+| `"latent"` | speed regressed on ability and covariates; `quantile =` (Gibbs) for quantile regression |
+| `"cross"` | cross-relations of ability with each log response time; `quantile =` (Gibbs) |
 
 ## Data
 
@@ -52,33 +54,36 @@ decreases; SQUAREM accelerates it, and the standard errors come from the observe
 information.
 
 ```{r}
-fit <- ecm(rtirt_latent(dat))
+fit <- ecm(dat, model = "latent")
 fit
-estimates(fit, pars = "beta|b_ability")   # est, se, z, Wald 95% interval
-head(scores(fit))                         # EAP and posterior SD of ability and speed
+estimates(fit, pars = "beta|b_ability") # est, se, z, Wald 95% interval
+head(scores(fit)) # EAP and posterior SD of ability and speed
 c(logLik = logLik(fit), AIC = AIC(fit), BIC = BIC(fit))
 ```
 
-Nested models compare by a likelihood-ratio test; `rtirt_null()` is `rtirt_latreg()`
-without covariates:
+Nested models compare by a likelihood-ratio test; `model = "null"` is `model = "latreg"`
+without covariates (it leaves them out):
 
 ```{r}
-f0 <- ecm(rtirt_null(dat))      # warns that rtirt_null() ignores the covariates
-f1 <- ecm(rtirt_latreg(dat))
+f0 <- ecm(dat, model = "null")
+f1 <- ecm(dat, model = "latreg")
 lr <- 2 * (logLik(f1) - logLik(f0))
-c(LR = lr, df = f1$ecm$npar - f0$ecm$npar,
-  p = pchisq(lr, f1$ecm$npar - f0$ecm$npar, lower.tail = FALSE))
+df <- f1$ecm$npar - f0$ecm$npar
+c(LR = lr, df = df, p = pchisq(lr, df, lower.tail = FALSE))
 ```
 
-Other settings: `nodes` (Gauss-Hermite nodes, default 41), `max_iter`, `tol`, `se`,
-`accelerate`, and `prior = "map"` with `priors = rtirt_priors(...)` for the posterior mode
-in the item parameters (small samples).
+Other settings: `se`, and `prior = "map"` with `priors = rtirt_priors(...)` for the posterior
+mode in the item parameters (small samples); `control = ecm_control()` sets `nodes`
+(Gauss-Hermite nodes, default 41), `max_iter`, `tol` and `accelerate`.
 
 ## Gibbs from the ECM solution
 
+`init = fit` starts every chain near the ECM solution:
+
 ```{r}
-g <- gibbs(fit, n_iter = 1500, n_chain = 2, init = "ecm", seed = 1, verbose = FALSE)
-estimates(g, pars = "beta|b_ability")     # posterior mean, SD, 95% interval, R-hat, ESS
+quiet <- gibbs_control(verbose = FALSE)
+g <- gibbs(dat, model = "latent", init = fit, n_iter = 1500, n_chain = 2, seed = 1, control = quiet)
+estimates(g, pars = "beta|b_ability") # posterior mean, SD, 95% interval, R-hat, ESS
 convergence(g)
 ```
 
@@ -88,8 +93,10 @@ Quantile models use the asymmetric Laplace working likelihood, so `ecm()` refuse
 For several quantile levels, give a vector; the result holds one model per level:
 
 ```{r}
-qs <- gibbs(rtirt_latent(dat, quantile = c(0.25, 0.5, 0.75)), n_iter = 1000, n_chain = 2,
-            seed = 1, verbose = FALSE)
+qs <- gibbs(dat,
+  model = "latent", quantile = c(0.25, 0.5, 0.75), n_iter = 1000, n_chain = 2,
+  seed = 1, control = quiet
+)
 qs
 ```
 

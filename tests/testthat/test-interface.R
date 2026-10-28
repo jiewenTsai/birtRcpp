@@ -109,3 +109,8 @@ test_that("equations() and algorithm() of data and a model name match the old co
   expect_identical(as.character(new_alg), as.character(old_alg))
   expect_error(equations(dat), "model")
 })
+
+test_that("ecm() refuses quantile models", {
+  dat <- small_data()
+  expect_error(ecm(dat, model = "cross", quantile = 0.9), "quantile models use gibbs")
+})
