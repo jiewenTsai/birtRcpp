@@ -298,7 +298,8 @@ test_that("ECM fits with extreme estimates or standard errors warn in print() an
 test_that("messages and checks point to the current interface, and ecm() fits are accepted where models were", {
   dat <- small_data()
   fit <- ecm(dat, model = "cross", se = FALSE)
-  expect_error(check_sampler(dat), "model must be an ecm() or gibbs() fit, e.g. check_sampler(ecm(dat", fixed = TRUE)
+  expect_error(check_sampler(dat), "checks the sampler of a fit, not data: check_sampler(ecm(dat", fixed = TRUE)
+  expect_error(check_sampler(list()), "model must be an ecm() or gibbs() fit, e.g. check_sampler(ecm(dat", fixed = TRUE)
   expect_error(check_ecm(steps = 1), "check_ecm(): give an ecm() fit, e.g. check_ecm(ecm(dat, model = \"cross\"))", fixed = TRUE)
   check <- check_ecm(fit, prior = "ml", n_start = 2, seed = 1)                   # an ecm() fit, as documented
   expect_true(attr(check, "passed"))

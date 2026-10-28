@@ -145,7 +145,23 @@ regression_cases <- function() {
 
 # the hint lines ("Use summary(), ...") name the interface, which task 3.1 changed on purpose
 drop_hints <- function(lines) {
-  lines[!startsWith(lines, "Use ")]
+  lines <- lines[!startsWith(lines, "Use ")]
+  if (length(lines)) {
+    lines[1] <- header_class(lines[1])
+  }
+  lines
+}
+
+# the first line of print(): "rtirt_cross " in the baseline, 'model = "cross" (rtirt_cross)' since
+# the header names the model as in ecm(); both reduce to the class (and quantile)
+header_class <- function(line) {
+  line <- trimws(line)
+  new_form <- '^model = "[a-z]+"(, quantile = ([0-9.]+))? \\(([a-z_]+)\\)$'
+  if (grepl(new_form, line)) {
+    quantile <- sub(new_form, "\\2", line)
+    line <- paste0(sub(new_form, "\\3", line), if (nzchar(quantile)) sprintf(" (quantile %s)", quantile) else "")
+  }
+  line
 }
 
 # printed text, with run times removed
