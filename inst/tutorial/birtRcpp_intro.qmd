@@ -450,30 +450,21 @@ reliability(fit)
 
 ```{r ecm-compare}
 f0 <- ecm(dat, model = "null")
-tibble::tibble(
-  model = c("null", "cross"),
-  logLik = c(logLik(f0), logLik(fit)),
-  npar = c(f0$ecm$npar, fit$ecm$npar),
-  AIC = c(AIC(f0), AIC(fit)),
-  BIC = c(BIC(f0), BIC(fit))
-)
+anova(f0, fit)
 ```
 
 **逐行說明**
 
 1. 用 ECM 估計 `"null"` 模型：同一份資料，沒有 ρ，但能力與速度可以有相關。
-2. 把兩個模型的指標並排成一個表（`tibble::tibble()`，tidyverse 的資料框），一列一個模型。
-3. `logLik()`：對數概似。
-4. `f0$ecm$npar`：參數個數。
-5. `AIC()`。
-6. `BIC()`。
+2. `anova(f0, fit)`：和 `lm()` 的 `anova()` 一樣，把兩個模型並排比較。兩個模型必須是同一份資料（作答與作答時間都一樣），否則會報錯。
 
 **輸出怎麼讀**
 
-- 一列一個模型。
-- `null` 少了 10 個 ρ，多了 1 個能力與速度的相關，所以少 9 個參數（42 對 51）。
-- `cross` 的 logLik 大很多（−9946.6 對 −10121.0）。
-- `cross` 的 AIC（19995 對 20326）、BIC（20219 對 20511）都比較小。所以交叉關係模型比較好。
+- 最上面列出每一列是哪個模型（`f0` 是 `model = "null"`，`fit` 是 `model = "cross"`）。表格依參數個數由少到多排列。
+- `npar`：參數個數。`null` 少了 10 個 ρ，多了 1 個能力與速度的相關，所以少 9 個參數（42 對 51）。
+- `logLik`：對數概似。`cross` 的 logLik 大很多（−9946.6 對 −10121.0）。
+- `AIC`、`BIC`：`cross` 的 AIC（19995 對 20326）、BIC（20219 對 20511）都比較小。所以交叉關係模型比較好。AIC、BIC 不需要巢套，任何同一份資料的模型都能比。
+- `Chisq`、`Df`、`Pr(>Chisq)`：概似比檢定，下面解釋。
 
 **概似比檢定**
 
@@ -481,26 +472,12 @@ tibble::tibble(
 - 為什麼？所有題目共用一個 ρ 時，「速度 + ρ × 能力」可以合成一個新的速度。這個新速度和能力有相關，就是 `"null"` 模型的相關。
 - 這種「一個模型是另一個模型加上限制」的關係叫**巢套**（nested）。巢套的兩個模型可以做概似比檢定。
 - 這裡檢定的是：「各題的 ρ 都一樣」這個限制成不成立。
-
-```{r ecm-lr}
-lr <- 2 * (logLik(fit) - logLik(f0))
-dfr <- fit$ecm$npar - f0$ecm$npar
-c(LR = lr, df = dfr, p = pchisq(lr, dfr, lower.tail = FALSE))
-```
-
-**逐行說明**
-
-1. 概似比統計量 LR = 2 ×（大模型的 logLik − 小模型的 logLik）。
-2. 自由度 = 兩個模型的參數個數差。
-3. `pchisq(lr, dfr, lower.tail = FALSE)`：卡方分配的右尾機率，就是 p 值。
-
-**輸出怎麼讀**
-
-- R 用科學記號印這三個數。`e+02` 是乘以 10²，`e-69` 是乘以 10⁻⁶⁹。
-- `LR` = 3.488057e+02，也就是約 348.8。
-- `df` = 9，也就是自由度 9。
-- `p` = 1.1e-69，非常接近 0。
+- `anova()` 算的是：
+  - `Chisq`：概似比統計量 LR = 2 ×（大模型的 logLik − 小模型的 logLik），約 348.8；
+  - `Df`：自由度 = 兩個模型的參數個數差，9；
+  - `Pr(>Chisq)`：卡方分配的右尾機率，就是 p 值。`< 2.22e-16` 表示比 2.22 × 10⁻¹⁶ 還小（R 能分辨的最小差距），也就是非常接近 0。後面的 `***` 是顯著性標記（最下面一行 `Signif. codes` 是對照表）。
 - 所以「各題的 ρ 都一樣」不成立：能力影響作答時間的方向和大小，題目之間不同。
+- `anova()` 只檢查兩個模型是不是同一份資料，不會檢查是不是巢套；不巢套的模型請只看 AIC、BIC。參數比較多、logLik 卻比較小時，`anova()` 會警告。
 
 ### 模型寫成式子：`equations()`
 
@@ -809,23 +786,19 @@ estimates(ej, pars = "beta|cor|var_speed")
 
 ```{r latreg-lr}
 e0 <- ecm(dataJ, model = "null")
-lr <- 2 * (logLik(ej) - logLik(e0))
-dfr <- ej$ecm$npar - e0$ecm$npar
-c(LR = lr, df = dfr, p = pchisq(lr, dfr, lower.tail = FALSE))
+anova(e0, ej)
 ```
 
 **逐行說明**
 
 1. 同一份資料，估計沒有共變項的 `"null"` 模型。資料裡的共變項，`"null"` 模型不會用到。
-2. 概似比統計量 LR = 2 ×（大模型的 logLik − 小模型的 logLik）。
-3. 自由度 = 兩個模型的參數個數差。
-4. `pchisq(lr, dfr, lower.tail = FALSE)`：卡方分配的右尾機率，就是 p 值。
+2. `anova()`：概似比檢定，和第 4 節一樣。
 
 **輸出怎麼讀**
 
-- LR 約 322.9（3.228611e+02）。
-- 自由度是 4：能力 2 個、速度 2 個迴歸係數。
-- p 值是 1.3e-68，非常接近 0。表示共變項有用。
+- `Chisq`：LR 約 322.9。
+- `Df`：自由度是 4：能力 2 個、速度 2 個迴歸係數。
+- `Pr(>Chisq)`：p 值非常接近 0（`< 2.22e-16`）。表示共變項有用。
 
 **用 Gibbs 確認**
 

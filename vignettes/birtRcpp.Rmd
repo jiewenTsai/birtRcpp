@@ -61,15 +61,14 @@ head(scores(fit)) # EAP and posterior SD of ability and speed
 c(logLik = logLik(fit), AIC = AIC(fit), BIC = BIC(fit))
 ```
 
-Nested models compare by a likelihood-ratio test; `model = "null"` is `model = "latreg"`
-without covariates (it leaves them out):
+`anova()` compares fits of the same data: AIC and BIC, and for nested models a
+likelihood-ratio test; `model = "null"` is `model = "latreg"` without covariates (it leaves
+them out):
 
 ```{r}
 f0 <- ecm(dat, model = "null")
 f1 <- ecm(dat, model = "latreg")
-lr <- 2 * (logLik(f1) - logLik(f0))
-df <- f1$ecm$npar - f0$ecm$npar
-c(LR = lr, df = df, p = pchisq(lr, df, lower.tail = FALSE))
+anova(f0, f1)
 ```
 
 Other settings: `se`, and `prior = "map"` with `priors = rtirt_priors(...)` for the posterior

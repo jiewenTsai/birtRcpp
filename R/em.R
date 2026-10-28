@@ -757,6 +757,124 @@ logLik.rtirt <- function(object, ...) {
   structure(object$ecm$logLik, df = object$ecm$npar, nobs = object$ecm$nobs, class = "logLik")
 }
 
+#' Compare fits of the same data
+#'
+#' `anova(fit0, fit1, ...)` compares [ecm()] fits of the same responses and response times,
+#' as `anova()` of `lm()`: the number of parameters, log-likelihood, AIC and BIC of each fit,
+#' and the likelihood ratio test of each fit against the one in the row above
+#' (`Chisq = 2 * (logLik - logLik above)`, `Df` the difference in the number of parameters).
+#' The rows are ordered by the number of parameters. The test assumes that each fit is nested
+#' in the next, e.g. `"null"` in `"latreg"` (the regression coefficients 0) or in `"cross"`
+#' (equal rho), `itemtype = "1pl"` in `"2pl"`, `speed_var = "fixed"` in `"free"`; AIC and BIC
+#' also compare fits that are not nested. A fit with more parameters but a lower
+#' log-likelihood gives a warning (not nested, or not converged).
+#'
+#' For [gibbs()] fits the table has the criteria of [fit_indices()] (DIC, WAIC, LOOIC with its
+#' standard error), smaller is better, and no test. Fits with `prior = "map"` (no likelihood),
+#' quantile fits (an ALD working likelihood) and a mix of ECM and Gibbs fits are refused.
+#' @param object,... Fits of [ecm()] (or of [gibbs()]) of the same data.
+#' @return A data frame of class `rtirt_anova` (and `anova`), printed with a heading that names
+#'   the fits.
+#' @examples
+#' cond <- set_cond(n_subj = 300, n_item = 8, n_feat = 1)
+#' dat <- sim_data(cond, sim_para(cond, "latreg"), "latreg")
+#' fit0 <- ecm(dat, model = "null")
+#' fit1 <- ecm(dat, model = "latreg")
+#' anova(fit0, fit1)
+#' @export
+anova.rtirt <- function(object, ...) {
+  fits <- list(object, ...)
+  labels <- vapply(as.list(substitute(list(object, ...)))[-1], function(e) paste(deparse(e, width.cutoff = 60L)[1], collapse = ""), "")
+  if (length(fits) < 2) {
+    stop("anova() compares two or more fits of the same data, e.g. anova(fit0, fit1)", call. = FALSE)
+  }
+  is_fit <- vapply(fits, function(f) inherits(f, "rtirt") && (has_em(f) || !is.null(f$post)), TRUE)
+  if (!all(is_fit)) {
+    stop(sprintf("anova() compares fits of ecm() or gibbs(); not a fit: %s", paste(labels[!is_fit], collapse = ", ")), call. = FALSE)
+  }
+  is_ecm <- vapply(fits, has_em, TRUE)
+  if (any(is_ecm) && !all(is_ecm)) {
+    stop("anova() compares ecm() fits with ecm() fits (likelihood ratio, AIC, BIC) or gibbs() fits with gibbs() fits (WAIC, LOOIC), not both",
+         call. = FALSE)
+  }
+  check_same_data(fits, labels)
+  if (all(is_ecm)) {
+    order_npar <- order(vapply(fits, function(f) as.numeric(f$ecm$npar), 0))
+    fits <- fits[order_npar]
+    labels <- labels[order_npar]
+  }
+  heading_models <- paste(sprintf("%s: %s", labels, vapply(fits, model_label, "")), collapse = "\n")
+  if (all(is_ecm)) anova_ecm(fits, labels, heading_models) else anova_gibbs(fits, labels, heading_models)
+}
+
+# the fits of anova() must have the same responses and response times
+check_same_data <- function(fits, labels) {
+  first <- fits[[1]]$data
+  has_rt <- vapply(fits, function(f) .model_info[[class(f)[1]]]$rt, TRUE)
+  for (k in seq_along(fits)[-1]) {
+    data <- fits[[k]]$data
+    if (has_rt[1] != has_rt[k]) {
+      stop(sprintf("%s and %s are not comparable: one has response times and the other not (model = \"irt\")", labels[1],
+                   labels[k]), call. = FALSE)
+    }
+    if (!identical(dim(first$Y), dim(data$Y)) || !identical(first$Y, data$Y) || !identical(first$log_t, data$log_t)) {
+      stop(sprintf("%s and %s are fits of different data; anova() compares fits of the same responses and times", labels[1],
+                   labels[k]), call. = FALSE)
+    }
+  }
+}
+
+anova_ecm <- function(fits, labels, heading_models) {
+  map <- vapply(fits, function(f) isTRUE(f$ecm$map), TRUE)
+  if (any(map)) {
+    stop(sprintf("%s: fitted with prior = \"map\", so there is no likelihood to compare; refit with prior = \"ml\"",
+                 paste(labels[map], collapse = ", ")), call. = FALSE)
+  }
+  not_converged <- !vapply(fits, function(f) isTRUE(f$ecm$converged), TRUE)
+  if (any(not_converged)) {
+    warning(sprintf("%s did not converge; the comparison may be off", paste(labels[not_converged], collapse = ", ")), call. = FALSE)
+  }
+  npar <- vapply(fits, function(f) as.numeric(f$ecm$npar), 0)
+  loglik <- vapply(fits, function(f) f$ecm$logLik, 0)
+  chisq <- c(NA, 2 * diff(loglik))
+  df <- c(NA, diff(npar))
+  testable <- !is.na(df) & df > 0 & chisq > -1e-6
+  p_value <- ifelse(testable, stats::pchisq(pmax(chisq, 0), df, lower.tail = FALSE), NA_real_)
+  lower <- which(!is.na(chisq) & chisq < -1e-6 & df > 0)
+  if (length(lower)) {
+    warning(sprintf("%s has more parameters than %s but a lower log-likelihood: the fits are not nested (or did not converge); compare them by AIC or BIC",
+                    labels[lower[1]], labels[lower[1] - 1]), call. = FALSE)
+  }
+  table <- data.frame(npar = npar, logLik = loglik, AIC = vapply(fits, function(f) f$ecm$AIC, 0),
+                      BIC = vapply(fits, function(f) f$ecm$BIC, 0), Chisq = chisq, Df = df, `Pr(>Chisq)` = p_value,
+                      row.names = labels, check.names = FALSE)
+  heading <- c(paste0("Likelihood ratio tests of ecm() fits (each row against the row above; valid for nested fits)\n\n",
+                      heading_models, "\n"))
+  structure(table, heading = heading, class = c("rtirt_anova", "anova", "data.frame"))
+}
+
+#' @rdname anova.rtirt
+#' @param x The result of `anova()`.
+#' @param digits Significant digits (default 7, so that AIC and BIC keep a decimal).
+#' @export
+print.rtirt_anova <- function(x, digits = max(getOption("digits"), 7), ...) {
+  NextMethod(digits = digits)
+}
+
+anova_gibbs <- function(fits, labels, heading_models) {
+  quantile_fit <- vapply(fits, function(f) isTRUE(f$qr), TRUE)
+  if (any(quantile_fit)) {
+    stop(sprintf("%s: quantile fits have an ALD working likelihood, not comparable with other fits", paste(labels[quantile_fit], collapse = ", ")),
+         call. = FALSE)
+  }
+  indices <- lapply(fits, function(f) fit_indices(f))
+  get <- function(name) vapply(indices, function(x) as.numeric(x[[name]]), 0)
+  table <- data.frame(DIC = get("DIC"), pD = get("pD"), WAIC = get("WAIC"), LOOIC = get("LOOIC"), SE_LOOIC = get("SE_LOOIC"),
+                      row.names = labels, check.names = FALSE)
+  heading <- paste0("Fit criteria of gibbs() fits (marginal likelihood; smaller is better)\n\n", heading_models, "\n")
+  structure(table, heading = heading, class = c("rtirt_anova", "anova", "data.frame"))
+}
+
 #' @export
 vcov.rtirt <- function(object, ...) {
   need_em(object)

@@ -82,16 +82,17 @@ coding (0/1), missing values, logged times and uncentred covariates, and says wh
 
 ### 1. ECM first, then Gibbs from the ECM solution
 
-`ecm()` gives estimates, standard errors, `logLik()`, `AIC()`, `BIC()` and likelihood-ratio tests.
+`ecm()` gives estimates, standard errors, `logLik()`, `AIC()`, `BIC()` and likelihood-ratio tests
+(`anova()`).
 `gibbs(dat, model = "cross", init = fit)` starts the chains at that solution, so a short burn-in
 is enough.
 
 ```r
 f0 <- ecm(dat, model = "null")                   # nested: equal rho for every item
-lr <- 2 * (logLik(fit) - logLik(f0)); df <- fit$ecm$npar - f0$ecm$npar
-c(LR = lr, df = df, p = pchisq(lr, df, lower.tail = FALSE))
-#>           LR           df            p 
-#> 2.981960e+02 9.000000e+00 6.299468e-59 
+anova(f0, fit)                                   # npar, logLik, AIC, BIC, LR test
+#>     npar    logLik      AIC      BIC   Chisq Df Pr(>Chisq)    
+#> f0    42 -8458.130 17000.26 17177.27                          
+#> fit   51 -8309.032 16720.06 16935.01 298.196  9 < 2.22e-16 ***
 
 g <- gibbs(dat, model = "cross", init = fit, n_iter = 2000, n_chain = 3, seed = 1)
 g
