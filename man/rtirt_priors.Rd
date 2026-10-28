@@ -31,15 +31,15 @@ truncated at 0), to reproduce ExtendedRtIrtModeling.jl; every other prior is fix
 (half-t on its square root) or \code{c(shape = , scale = )} (inverse gamma).}
 
 \item{beta}{Regression coefficients of the latent regressions (including \code{b_ability} of
-\code{rtirt_latent()}), normal with mean 0: \code{c(sd)}.}
+\code{"latent"}), normal with mean 0: \code{c(sd)}.}
 
-\item{rho}{Cross-relations of \code{rtirt_cross()}, normal with mean 0: \code{c(sd)}.}
+\item{rho}{Cross-relations of \code{model = "cross"}, normal with mean 0: \code{c(sd)}.}
 
-\item{var_speed}{Speed variance (\code{rtirt_cross()}), residual speed variance (\code{rtirt_latreg()},
-\code{rtirt_null()}) or its ALD scale (\code{rtirt_latent()}): \code{c(df = , scale = )} or
+\item{var_speed}{Speed variance (\code{"cross"}), residual speed variance (\code{"latreg"},
+\code{"null"}) or its ALD scale (\code{"latent"}): \code{c(df = , scale = )} or
 \code{c(shape = , scale = )}, as \code{sigma2t}.}
 
-\item{cov}{Covariance \code{c} of speed with ability in \code{rtirt_latreg()}/\code{rtirt_null()} with free
+\item{cov}{Covariance \code{c} of speed with ability in \code{"latreg"} / \code{"null"} with free
 speed variance, normal with mean 0: \code{c(sd)} (with \code{speed_var = "fixed"} the correlation is
 uniform on (-1, 1)).}
 }

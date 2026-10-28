@@ -68,7 +68,8 @@ times. Speed scores (EAPs) also use the responses and are not such a function.
 \strong{DIF and impact.} The model identifies ability as N(x'beta, 1) for everyone, so a moderator
 related to ability (impact) shifts all difficulties and is flagged as instability. To test DIF
 beyond impact, include the moderator as a covariate of the latent regression
-(\code{rtirt_latreg()}, \code{mlirt()}) and test that fit; \code{score_test()} gives a message when the
+(\code{ecm(input_data(..., cov = z), model = "latreg")}, or \code{model = "irt"} without response times)
+and test that fit; \code{score_test()} gives a message when the
 moderator correlates with the ability EAPs and is not among the covariates.
 
 \strong{Clustered data.} With \code{cluster}, the scores are summed within clusters, which is exact for a

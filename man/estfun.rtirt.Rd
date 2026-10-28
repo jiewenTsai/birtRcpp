@@ -25,7 +25,7 @@ the 'sandwich' package.
 person, one column per parameter, the derivative of that person's marginal log-likelihood (ability
 and speed integrated out). The columns sum to zero at the estimates. The parameters are on the
 unconstrained scale used by \code{ecm()}: log a, b, lambda, log sigma2t, then the structural parameters
-(for \code{rtirt_latreg()}/\code{rtirt_null()} with free speed variance: the regression coefficients, the
+(for \code{model = "latreg"} / \code{"null"} with free speed variance: the regression coefficients, the
 covariance \code{c} and the log residual variance \code{log_v} of speed given ability). These are the
 estimating functions used by \code{\link[=score_test]{score_test()}} and by \code{strucchange::gefp()}.
 }

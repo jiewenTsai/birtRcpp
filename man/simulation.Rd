@@ -13,8 +13,9 @@ sim_data(cond, para, model = sim_models, type = c("norm", "tail", "skew"))
 \arguments{
 \item{cond}{Conditions from \code{\link[=set_cond]{set_cond()}}.}
 
-\item{model}{\code{"cross"} (\code{\link[=rtirt_cross]{rtirt_cross()}}), \code{"latent"} (\code{\link[=rtirt_latent]{rtirt_latent()}}), \code{"latreg"}
-(\code{\link[=rtirt_latreg]{rtirt_latreg()}}), \code{"null"} (\code{\link[=rtirt_null]{rtirt_null()}}) or \code{"mlirt"} (\code{\link[=mlirt]{mlirt()}}).}
+\item{model}{The model of \code{\link[=ecm]{ecm()}} and \code{\link[=gibbs]{gibbs()}} to simulate from: \code{"cross"}, \code{"latent"},
+\code{"latreg"}, \code{"null"}, or \code{"mlirt"} (the 2PL with a latent regression, \code{model = "irt"} in
+\code{\link[=ecm]{ecm()}} and \code{\link[=gibbs]{gibbs()}}).}
 
 \item{true_corr}{Correlation of ability and speed (\code{"latreg"}, \code{"null"}).}
 
@@ -27,7 +28,7 @@ variance) or \code{"skew"} (centred Gamma(0.5, 1), scaled to the same variance);
 \value{
 \code{sim_para}: an \code{\link[=input_para]{input_para()}}; \code{sim_data}: an \code{\link[=input_data]{input_data()}} (items \code{item01}, ...;
 covariates \code{x1}, ...) with the true parameters (item and person) in \code{attr(, "true_para")},
-which the model constructors pick up.
+which \code{\link[=compare_para]{compare_para()}} uses after \code{ecm(data, model = ...)} or \code{gibbs(data, model = ...)}.
 }
 \description{
 \code{sim_para()} draws true parameters for a condition; \code{sim_data()} simulates data from them

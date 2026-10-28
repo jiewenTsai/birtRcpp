@@ -51,7 +51,11 @@
 #' conditionals and forgotten or wrong prior terms, which summaries of a fit cannot show; its power
 #' is that of a test on a small model (an error that moves the posterior by a fraction of a
 #' posterior SD can pass), so passing is evidence, not proof.
-#' @param model A model object (see [models]); sampled or not. Or a [block_model()]: its stacked steps
+#' This checks the code of the sampler, not the convergence of your own analysis: for that use
+#' [convergence()] and `plot(fit, "trace")`.
+#'
+#' @param model An [ecm()] or [gibbs()] fit (e.g. `ecm(dat, model = "cross", se = FALSE)`; only its
+#'   model, settings and size are used), or a model object of the deprecated constructors. Or a [block_model()] (deprecated): its stacked steps
 #'   (`steps`, see [gibbs()]) are checked by the Geweke test, with the parameters drawn from the
 #'   declared priors and the data from the declared model (use a small data set, e.g. 20 persons and
 #'   4 items). `NULL` with `step`.
@@ -155,7 +159,7 @@ check_sampler <- function(model = NULL, method = c("geweke", "sbc"), n_persons =
 
 check_check_inputs <- function(model, priors, sampler_priors) {
   if (!inherits(model, "rtirt")) {
-    stop("model must be a model object, e.g. rtirt_cross(data)", call. = FALSE)
+    stop("model must be an ecm() or gibbs() fit, e.g. check_sampler(ecm(dat, model = \"cross\", se = FALSE))", call. = FALSE)
   }
   for (p in list(priors, sampler_priors)) {
     if (!inherits(p, "rtirt_priors")) {

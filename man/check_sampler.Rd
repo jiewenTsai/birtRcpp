@@ -30,7 +30,8 @@ check_sampler(
 \method{print}{rtirt_check}(x, n = 10, ...)
 }
 \arguments{
-\item{model}{A model object (see \link{models}); sampled or not. Or a \code{\link[=block_model]{block_model()}}: its stacked steps
+\item{model}{An \code{\link[=ecm]{ecm()}} or \code{\link[=gibbs]{gibbs()}} fit (e.g. \code{ecm(dat, model = "cross", se = FALSE)}; only its
+model, settings and size are used), or a model object of the deprecated constructors. Or a \code{\link[=block_model]{block_model()}} (deprecated): its stacked steps
 (\code{steps}, see \code{\link[=gibbs]{gibbs()}}) are checked by the Geweke test, with the parameters drawn from the
 declared priors and the data from the declared model (use a small data set, e.g. 20 persons and
 4 items). \code{NULL} with \code{step}.}
@@ -122,6 +123,8 @@ the priors proper and not too wide, so that the chain mixes. The test finds wron
 conditionals and forgotten or wrong prior terms, which summaries of a fit cannot show; its power
 is that of a test on a small model (an error that moves the posterior by a fraction of a
 posterior SD can pass), so passing is evidence, not proof.
+This checks the code of the sampler, not the convergence of your own analysis: for that use
+\code{\link[=convergence]{convergence()}} and \code{plot(fit, "trace")}.
 }
 \examples{
 \donttest{

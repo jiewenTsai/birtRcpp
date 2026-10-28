@@ -30,8 +30,8 @@ the speed on the other items, \eqn{(\hat\tau_c - \hat\tau_{\bar c}) / \sqrt{1/W_
 \item \code{L_s}: signed likelihood ratio of the item scores comparing the ability (maximum likelihood) on the
 two sets; large values: better on the compromised items.
 The p-values are one-sided for \code{Lambda_s} and \code{L_s} (standard normal) and upper-tail for \code{chi_pf}.
-Models with the speed entering as \eqn{\lambda_i - \zeta_j} (\code{\link[=rtirt_null]{rtirt_null()}}, \code{\link[=rtirt_latreg]{rtirt_latreg()}},
-\code{\link[=rtirt_latent]{rtirt_latent()}} without quantile RT residuals).
+Models with the speed entering as \eqn{\lambda_i - \zeta_j}: \code{model = "null"}, \code{"latreg"} and
+\code{"latent"} (mean model).
 }
 }
 \examples{

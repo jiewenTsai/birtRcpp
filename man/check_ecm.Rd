@@ -24,8 +24,8 @@ check_ecm(
 \method{print}{em_check}(x, ...)
 }
 \arguments{
-\item{model}{A \code{\link[=block_model]{block_model()}}, a built-in model (e.g. \code{rtirt_cross(data)}), or \code{NULL} for a
-hand-written EM.}
+\item{model}{An \code{\link[=ecm]{ecm()}} fit (e.g. \code{ecm(dat, model = "cross")}), a \code{\link[=block_model]{block_model()}}, or \code{NULL} for
+a hand-written EM.}
 
 \item{steps, latent, nodes, prior, quadrature}{As in \code{\link[=ecm]{ecm()}} (for a built-in model only \code{prior} and
 \code{nodes}, default 41).}
@@ -58,26 +58,30 @@ at \eqn{x}{x}); and
 and the gradient is zero there).
 }
 
-For a \code{\link[=block_model]{block_model()}} all three are checked, with starting values drawn from the declared priors.
-For a built-in normal model (\code{\link[=mlirt]{mlirt()}}, \verb{rtirt_*()} without \code{quantile}) the three are checked for
+For an \code{\link[=ecm]{ecm()}} fit of a built-in model (any model but the quantile ones; a \code{\link[=gibbs]{gibbs()}} fit or a
+model object of the deprecated constructors also works) the three are checked for
 the EM of \code{\link[=ecm]{ecm()}} with its own E- and M-step, from \code{n_start} starting values jittered around those
 of \code{\link[=ecm]{ecm()}}: one whole M-step (which updates all blocks) never lowers the objective, the analytic
 score (Fisher's identity) equals the numerical gradient of the objective, and the fit is a maximum.
 For an EM written by hand, give \code{data}, \code{init}, \code{step} and \code{loglik} as for \code{\link[=run_em]{run_em()}}; checks 1
-(from \code{n_start} jittered starts) and 3 are done.
+(from \code{n_start} jittered starts) and 3 are done. For a \code{\link[=block_model]{block_model()}} (deprecated) all three are
+checked, with starting values drawn from the declared priors.
 }
 \examples{
-set.seed(1); N <- 200; K <- 5
-th <- rnorm(N); b0 <- seq(-1, 1, length.out = K)
-Y <- matrix(rbinom(N * K, 1, plogis(outer(th, b0, "-"))), N)
-m <- block_model(Y = Y,
-  theta[person] ~ normal(0, 1),
-  a[item] ~ normal(1, 1, lower = 0),
-  b[item] ~ normal(0, 3),
-  Y ~ bernoulli_logit(a * (theta - b)))
-check_ecm(m, list(step_gibbs(a, b)), n_start = 3, seed = 1)
-# a built-in model: the EM of ecm()
+# the EM of ecm() for the cross-relation model
 cond <- set_cond(n_subj = 200, n_item = 5)
-m_cross <- rtirt_cross(sim_data(cond, sim_para(cond, "cross"), "cross"))
-check_ecm(m_cross, prior = "ml", n_start = 3, seed = 1)
+dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
+fit <- ecm(dat, model = "cross", se = FALSE)
+check_ecm(fit, prior = "ml", n_start = 3, seed = 1)
+# an EM written by hand (the 2PL of run_em())
+set.seed(1)
+Y <- matrix(rbinom(300 * 5, 1, plogis(outer(rnorm(300), seq(-1, 1, length.out = 5), "-"))), 300)
+step <- function(s, d) {
+  e <- estep_irt(d$Y, s$a, s$b)                 # E-step
+  s[c("a", "b")] <- mstep_items(e, s$a, s$b)    # M-step
+  s$.loglik <- e$loglik
+  s
+}
+check_ecm(data = list(Y = Y), init = list(a = rep(1, 5), b = rep(0, 5)), step = step,
+          loglik = function(s, d) estep_irt(d$Y, s$a, s$b)$loglik, positive = "a", n_start = 3, seed = 1)
 }

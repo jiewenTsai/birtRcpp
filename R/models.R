@@ -74,7 +74,7 @@ check_model_data <- function(type, data) {
     stop(type, " needs covariates: input_data(..., cov = )", call. = FALSE)
   }
   if (!info$X && !is.null(data$X)) {
-    hint <- if (info$rt) " (covariate effects on speed: rtirt_latent() or rtirt_latreg())" else ""
+    hint <- if (info$rt) " (covariate effects on speed: model = \"latent\" or \"latreg\")" else ""
     warning(sprintf("%s does not use covariates; the %d columns of cov are ignored%s", type, ncol(data$X), hint),
             call. = FALSE)
   }

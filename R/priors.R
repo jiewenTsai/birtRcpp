@@ -40,12 +40,12 @@
 #' @param sigma2t Residual variance (or ALD scale) of the log response times: `c(df = , scale = )`
 #'   (half-t on its square root) or `c(shape = , scale = )` (inverse gamma).
 #' @param beta Regression coefficients of the latent regressions (including `b_ability` of
-#'   `rtirt_latent()`), normal with mean 0: `c(sd)`.
-#' @param rho Cross-relations of `rtirt_cross()`, normal with mean 0: `c(sd)`.
-#' @param var_speed Speed variance (`rtirt_cross()`), residual speed variance (`rtirt_latreg()`,
-#'   `rtirt_null()`) or its ALD scale (`rtirt_latent()`): `c(df = , scale = )` or
+#'   `"latent"`), normal with mean 0: `c(sd)`.
+#' @param rho Cross-relations of `model = "cross"`, normal with mean 0: `c(sd)`.
+#' @param var_speed Speed variance (`"cross"`), residual speed variance (`"latreg"`,
+#'   `"null"`) or its ALD scale (`"latent"`): `c(df = , scale = )` or
 #'   `c(shape = , scale = )`, as `sigma2t`.
-#' @param cov Covariance `c` of speed with ability in `rtirt_latreg()`/`rtirt_null()` with free
+#' @param cov Covariance `c` of speed with ability in `"latreg"` / `"null"` with free
 #'   speed variance, normal with mean 0: `c(sd)` (with `speed_var = "fixed"` the correlation is
 #'   uniform on (-1, 1)).
 #' @return An object of class `rtirt_priors`.

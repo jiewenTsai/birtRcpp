@@ -30,7 +30,7 @@ probability that the pattern is flagged; Marianti et al. flag a pattern when it 
 }
 \details{
 Large values point to aberrant timing: rapid guessing, item preknowledge, running out of time,
-or a speed that changes during the test. Normal log times only (not \code{rtirt_cross(quantile = )}).
+or a speed that changes during the test. Normal log times only (not \code{gibbs(model = "cross", quantile = )}).
 }
 \examples{
 \donttest{

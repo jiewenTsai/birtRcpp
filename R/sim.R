@@ -13,8 +13,9 @@
 #' a ~ N+(1, 0.2^2), b ~ N(0, 0.5^2), sigma2t ~ logN(log 0.3, 0.2^2).
 #'
 #' @param cond Conditions from [set_cond()].
-#' @param model `"cross"` ([rtirt_cross()]), `"latent"` ([rtirt_latent()]), `"latreg"`
-#'   ([rtirt_latreg()]), `"null"` ([rtirt_null()]) or `"mlirt"` ([mlirt()]).
+#' @param model The model of [ecm()] and [gibbs()] to simulate from: `"cross"`, `"latent"`,
+#'   `"latreg"`, `"null"`, or `"mlirt"` (the 2PL with a latent regression, `model = "irt"` in
+#'   [ecm()] and [gibbs()]).
 #' @param para True parameters from `sim_para()` with the same `model`.
 #' @param true_corr Correlation of ability and speed (`"latreg"`, `"null"`).
 #' @param type Residual distribution: `"norm"`, `"tail"` (t with 5 df, scaled to the same
@@ -22,7 +23,7 @@
 #'   (log RT residuals) and `"latent"` (speed residuals).
 #' @return `sim_para`: an [input_para()]; `sim_data`: an [input_data()] (items `item01`, ...;
 #'   covariates `x1`, ...) with the true parameters (item and person) in `attr(, "true_para")`,
-#'   which the model constructors pick up.
+#'   which [compare_para()] uses after `ecm(data, model = ...)` or `gibbs(data, model = ...)`.
 #' @name simulation
 NULL
 

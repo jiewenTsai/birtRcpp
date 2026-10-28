@@ -11,7 +11,7 @@
 #'   probability that the pattern is flagged; Marianti et al. flag a pattern when it is at least .95.
 #'
 #' Large values point to aberrant timing: rapid guessing, item preknowledge, running out of time,
-#' or a speed that changes during the test. Normal log times only (not `rtirt_cross(quantile = )`).
+#' or a speed that changes during the test. Normal log times only (not `gibbs(model = "cross", quantile = )`).
 #' @param object A model sampled by [gibbs()].
 #' @param flag Posterior probability above which a pattern is flagged.
 #' @param ... Unused.
@@ -42,7 +42,7 @@ person_fit <- function(object, flag = 0.95, ...) {
     stop("person_fit() needs a model with response times", call. = FALSE)
   }
   if (identical(info$engine, "cross") && isTRUE(object$qr)) {
-    stop("the chi-square person fit needs normal log times; rtirt_cross(quantile = ) has ALD times", call. = FALSE)
+    stop("the chi-square person fit needs normal log times; gibbs(model = \"cross\", quantile = ) has ALD times", call. = FALSE)
   }
   rt_fit <- object$post$person$rt_fit
   if (is.null(rt_fit)) {
@@ -162,8 +162,8 @@ print.rtirt_ci_test <- function(x, digits = 3, ...) {
 #' * `L_s`: signed likelihood ratio of the item scores comparing the ability (maximum likelihood) on the
 #'   two sets; large values: better on the compromised items.
 #' The p-values are one-sided for `Lambda_s` and `L_s` (standard normal) and upper-tail for `chi_pf`.
-#' Models with the speed entering as \eqn{\lambda_i - \zeta_j} ([rtirt_null()], [rtirt_latreg()],
-#' [rtirt_latent()] without quantile RT residuals).
+#' Models with the speed entering as \eqn{\lambda_i - \zeta_j}: `model = "null"`, `"latreg"` and
+#' `"latent"` (mean model).
 #' @param object A model fitted by [ecm()] or [gibbs()].
 #' @param compromised Items in the compromised set (names or a logical / integer index).
 #' @param ... Unused.
@@ -179,7 +179,7 @@ print.rtirt_ci_test <- function(x, digits = 3, ...) {
 preknowledge_test <- function(object, compromised, ...) {
   info <- .model_info[[class(object)[1]]]
   if (!info$engine %in% c("rtirt", "latent") || !info$rt) {
-    stop("preknowledge_test() needs rtirt_null(), rtirt_latreg() or rtirt_latent()", call. = FALSE)
+    stop("preknowledge_test() needs a fit of model = \"null\", \"latreg\" or \"latent\"", call. = FALSE)
   }
   par <- preknowledge_items(object)
   data <- object$data

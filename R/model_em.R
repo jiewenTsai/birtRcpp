@@ -854,16 +854,17 @@ print.block_model_ecm <- function(x, ...) {
 #' 3. **ECM stops at a maximum** (a general optimizer started at the ECM estimate finds nothing better,
 #'    and the gradient is zero there).
 #'
-#' For a [block_model()] all three are checked, with starting values drawn from the declared priors.
-#' For a built-in normal model ([mlirt()], `rtirt_*()` without `quantile`) the three are checked for
+#' For an [ecm()] fit of a built-in model (any model but the quantile ones; a [gibbs()] fit or a
+#' model object of the deprecated constructors also works) the three are checked for
 #' the EM of [ecm()] with its own E- and M-step, from `n_start` starting values jittered around those
 #' of [ecm()]: one whole M-step (which updates all blocks) never lowers the objective, the analytic
 #' score (Fisher's identity) equals the numerical gradient of the objective, and the fit is a maximum.
 #' For an EM written by hand, give `data`, `init`, `step` and `loglik` as for [run_em()]; checks 1
-#' (from `n_start` jittered starts) and 3 are done.
+#' (from `n_start` jittered starts) and 3 are done. For a [block_model()] (deprecated) all three are
+#' checked, with starting values drawn from the declared priors.
 #'
-#' @param model A [block_model()], a built-in model (e.g. `rtirt_cross(data)`), or `NULL` for a
-#'   hand-written EM.
+#' @param model An [ecm()] fit (e.g. `ecm(dat, model = "cross")`), a [block_model()], or `NULL` for
+#'   a hand-written EM.
 #' @param steps,latent,nodes,prior,quadrature As in [ecm()] (for a built-in model only `prior` and
 #'   `nodes`, default 41).
 #' @param n_start Number of starting values.
@@ -873,19 +874,22 @@ print.block_model_ecm <- function(x, ...) {
 #' @param ... Unused.
 #' @return A data frame with one row per check (`check`, `worst`, `limit`, `passed`), class `em_check`.
 #' @examples
-#' set.seed(1); N <- 200; K <- 5
-#' th <- rnorm(N); b0 <- seq(-1, 1, length.out = K)
-#' Y <- matrix(rbinom(N * K, 1, plogis(outer(th, b0, "-"))), N)
-#' m <- block_model(Y = Y,
-#'   theta[person] ~ normal(0, 1),
-#'   a[item] ~ normal(1, 1, lower = 0),
-#'   b[item] ~ normal(0, 3),
-#'   Y ~ bernoulli_logit(a * (theta - b)))
-#' check_ecm(m, list(step_gibbs(a, b)), n_start = 3, seed = 1)
-#' # a built-in model: the EM of ecm()
+#' # the EM of ecm() for the cross-relation model
 #' cond <- set_cond(n_subj = 200, n_item = 5)
-#' m_cross <- rtirt_cross(sim_data(cond, sim_para(cond, "cross"), "cross"))
-#' check_ecm(m_cross, prior = "ml", n_start = 3, seed = 1)
+#' dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
+#' fit <- ecm(dat, model = "cross", se = FALSE)
+#' check_ecm(fit, prior = "ml", n_start = 3, seed = 1)
+#' # an EM written by hand (the 2PL of run_em())
+#' set.seed(1)
+#' Y <- matrix(rbinom(300 * 5, 1, plogis(outer(rnorm(300), seq(-1, 1, length.out = 5), "-"))), 300)
+#' step <- function(s, d) {
+#'   e <- estep_irt(d$Y, s$a, s$b)                 # E-step
+#'   s[c("a", "b")] <- mstep_items(e, s$a, s$b)    # M-step
+#'   s$.loglik <- e$loglik
+#'   s
+#' }
+#' check_ecm(data = list(Y = Y), init = list(a = rep(1, 5), b = rep(0, 5)), step = step,
+#'           loglik = function(s, d) estep_irt(d$Y, s$a, s$b)$loglik, positive = "a", n_start = 3, seed = 1)
 #' @export
 check_ecm <- function(model = NULL, steps = NULL, latent = NULL, nodes = NULL, prior = c("map", "ml"), n_start = 10,
                      data = NULL, init = NULL, step = NULL, loglik = NULL, positive = character(), seed = NULL, quadrature = c("adaptive", "ba81")) {
@@ -933,7 +937,7 @@ check_ecm <- function(model = NULL, steps = NULL, latent = NULL, nodes = NULL, p
   } else if (inherits(model, c("rtirt", "rtirt_qset"))) {
     em_check_builtin(model, match.arg(prior), nodes, n_start, add)
   } else {
-    if (is.null(step) || is.null(loglik) || is.null(init)) stop("check_ecm(): give a block_model, a built-in model, or data, init, step and loglik as for run_em()", call. = FALSE)
+    if (is.null(step) || is.null(loglik) || is.null(init)) stop("check_ecm(): give an ecm() fit, e.g. check_ecm(ecm(dat, model = \"cross\")), or data, init, step and loglik as for run_em()", call. = FALSE)
     s0 <- if (is.function(init)) init(data) else init
     par <- names(s0)[!startsWith(names(s0), ".") & vapply(s0, is.numeric, TRUE)]
     drop_l <- 0; mism <- 0

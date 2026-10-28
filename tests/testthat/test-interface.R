@@ -218,3 +218,20 @@ test_that("ECM fits with extreme estimates or standard errors warn in print() an
   expect_false(grepl("extreme", paste(capture.output(print(map)), collapse = "\n")))
   expect_false(grepl("extreme", paste(capture.output(print(ecm(small_data(), model = "cross"))), collapse = "\n")))
 })
+
+test_that("messages and checks point to the current interface, and ecm() fits are accepted where models were", {
+  dat <- small_data()
+  fit <- ecm(dat, model = "cross", se = FALSE)
+  expect_error(check_sampler(dat), "model must be an ecm() or gibbs() fit, e.g. check_sampler(ecm(dat", fixed = TRUE)
+  expect_error(check_ecm(steps = 1), "check_ecm(): give an ecm() fit, e.g. check_ecm(ecm(dat, model = \"cross\"))", fixed = TRUE)
+  check <- check_ecm(fit, prior = "ml", n_start = 2, seed = 1)                   # an ecm() fit, as documented
+  expect_true(attr(check, "passed"))
+  expect_error(preknowledge_test(fit, compromised = 1:2), "needs a fit of model = \"null\", \"latreg\" or \"latent\"", fixed = TRUE)
+  # score_test(): the impact message suggests the latent regression of ecm()
+  skip_if_not_installed("strucchange")
+  set.seed(3)
+  z <- as.numeric(attr(dat, "true_para")$theta > 0)
+  expect_message(score_test(fit, z), "ecm(input_data(..., cov = z), model = \"latreg\")", fixed = TRUE)
+  with_cov <- input_data(resp = dat$Y, time = dat$T, cov = cbind(z = z - mean(z)))
+  expect_no_message(score_test(ecm(with_cov, model = "latreg", se = FALSE), z))
+})

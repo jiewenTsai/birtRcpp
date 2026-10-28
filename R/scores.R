@@ -15,7 +15,7 @@
 #' person, one column per parameter, the derivative of that person's marginal log-likelihood (ability
 #' and speed integrated out). The columns sum to zero at the estimates. The parameters are on the
 #' unconstrained scale used by `ecm()`: log a, b, lambda, log sigma2t, then the structural parameters
-#' (for `rtirt_latreg()`/`rtirt_null()` with free speed variance: the regression coefficients, the
+#' (for `model = "latreg"` / `"null"` with free speed variance: the regression coefficients, the
 #' covariance `c` and the log residual variance `log_v` of speed given ability). These are the
 #' estimating functions used by [score_test()] and by `strucchange::gefp()`.
 #' @param x A model fitted by [ecm()] (with `prior = "ml"`).
@@ -162,7 +162,8 @@ bread.rtirt <- function(x, ...) {
 #' **DIF and impact.** The model identifies ability as N(x'beta, 1) for everyone, so a moderator
 #' related to ability (impact) shifts all difficulties and is flagged as instability. To test DIF
 #' beyond impact, include the moderator as a covariate of the latent regression
-#' (`rtirt_latreg()`, `mlirt()`) and test that fit; `score_test()` gives a message when the
+#' (`ecm(input_data(..., cov = z), model = "latreg")`, or `model = "irt"` without response times)
+#' and test that fit; `score_test()` gives a message when the
 #' moderator correlates with the ability EAPs and is not among the covariates.
 #'
 #' **Clustered data.** With `cluster`, the scores are summed within clusters, which is exact for a
@@ -275,7 +276,7 @@ impact_message <- function(object, moderator) {
   if (!explained && abs(r) > 0.1 && stats::cor.test(eap, z)$p.value < 0.001) {
     message(sprintf(paste0("the moderator correlates %.2f with the ability EAPs: differences in mean ability (impact) show up as ",
                            "shifts of every b; to test DIF beyond impact, put the moderator in the latent regression ",
-                           "(e.g. rtirt_latreg(input_data(..., cov = z))) and test that fit"), r))
+                           "(e.g. ecm(input_data(..., cov = z), model = \"latreg\"), z centred) and test that fit"), r))
   }
 }
 
