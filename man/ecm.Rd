@@ -23,7 +23,9 @@ ecm(data, ...)
 \arguments{
 \item{data}{Data from \code{\link[=input_data]{input_data()}}.}
 
-\item{...}{Unused.}
+\item{...}{Not used: any other argument is an error before the fit starts. A setting of
+\code{\link[=ecm_control]{ecm_control()}} (\code{nodes}, \code{max_iter}, \code{tol}, \code{accelerate}, \code{verbose}) gets the
+\code{control = ecm_control(...)} form in the message, and a misspelled name the closest argument.}
 
 \item{model}{The model by name: \code{"irt"}, \code{"null"}, \code{"latreg"}, \code{"latent"}, \code{"cross"} or
 \code{"mixture"} (not available yet); see \code{\link[=gibbs]{gibbs()}}.}
@@ -46,7 +48,8 @@ structural parameters stay maximum likelihood.}
 
 \item{se}{Compute standard errors.}
 
-\item{control}{Further settings, from \code{\link[=ecm_control]{ecm_control()}}.}
+\item{control}{Further settings, from \code{\link[=ecm_control]{ecm_control()}}, e.g.
+\code{ecm(dat, model = "cross", control = ecm_control(nodes = 61))}.}
 }
 \value{
 A fitted model with \code{ecm}: \code{estimates} (est, se, z, Wald 95\% interval on the log scale

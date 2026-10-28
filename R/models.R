@@ -3,11 +3,11 @@
 # the mean and quantile (ALD) versions share a class and differ in `qr` / `q`.
 
 .model_info <- list(
-  mlirt        = list(engine = "mlirt",  rt = FALSE, X = TRUE),
-  rtirt_null   = list(engine = "rtirt",  rt = TRUE,  X = FALSE),
-  rtirt_latreg = list(engine = "rtirt",  rt = TRUE,  X = TRUE),
-  rtirt_latent = list(engine = "latent", rt = TRUE,  X = TRUE),
-  rtirt_cross  = list(engine = "cross",  rt = TRUE,  X = FALSE))
+  mlirt        = list(engine = "mlirt",  rt = FALSE, X = TRUE,  qr = FALSE),
+  rtirt_null   = list(engine = "rtirt",  rt = TRUE,  X = FALSE, qr = FALSE),
+  rtirt_latreg = list(engine = "rtirt",  rt = TRUE,  X = TRUE,  qr = FALSE),
+  rtirt_latent = list(engine = "latent", rt = TRUE,  X = TRUE,  qr = TRUE),
+  rtirt_cross  = list(engine = "cross",  rt = TRUE,  X = FALSE, qr = TRUE))
 
 # conditions for a data set: dimensions from the data, MCMC settings from `cond` (if given)
 data_cond <- function(cond, data, type) {
@@ -191,7 +191,8 @@ rtirt_cross <- function(data, quantile = NULL, speed_var = c("free", "fixed"), i
 #'   (`"null"`, `"latreg"`, `"cross"`).
 #' @param quantile `NULL` for the mean model, or the quantile level of the ALD model
 #'   (`"latent"`: of speed given ability and covariates; `"cross"`: of each log response
-#'   time). A vector fits one model per level (an `rtirt_qset`).
+#'   time). A vector fits one model per level (an `rtirt_qset`). Only `"latent"` and
+#'   `"cross"` have quantile versions; `quantile =` with another model is an error.
 #' @param cov Names of the covariates of `data` to use (default all); models without
 #'   covariates ignore them.
 #' @param intercept Add an intercept to the latent regressions (default `FALSE`: the
@@ -202,8 +203,12 @@ rtirt_cross <- function(data, quantile = NULL, speed_var = c("free", "fixed"), i
 #' @param init `"random"` (default): each chain draws its own starting values; an [ecm()]
 #'   fit of the same data and model: start the chains at its estimates and EAP scores, which
 #'   shortens the burn-in; `"ecm"`: run [ecm()] first and start there.
-#' @param control Further sampler settings, from [gibbs_control()].
-#' @param ... Unused.
+#' @param control Further sampler settings, from [gibbs_control()], e.g.
+#'   `gibbs(dat, model = "cross", control = gibbs_control(n_burnin = 500))`.
+#' @param ... Not used: any other argument is an error before sampling starts. A setting of
+#'   [gibbs_control()] (`n_burnin`, `n_thin`, `collapse`, `fit_indices`, `verbose`) gets the
+#'   `control = gibbs_control(...)` form in the message, and a misspelled name (`niter`) the
+#'   closest argument (`n_iter`).
 #' @return A fitted model with `post`: `draws` (a `coda::mcmc.list` of the item and structural
 #'   parameters, all iterations), `mean` (posterior means after burn-in, an [input_para()]),
 #'   `person` (posterior mean and SD of ability and speed), `loglik` (complete-data

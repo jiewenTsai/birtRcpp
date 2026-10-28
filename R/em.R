@@ -49,8 +49,11 @@
 #'   structural parameters stay maximum likelihood.
 #' @param priors Prior distributions for `prior = "map"`, from [rtirt_priors()].
 #' @param se Compute standard errors.
-#' @param control Further settings, from [ecm_control()].
-#' @param ... Unused.
+#' @param control Further settings, from [ecm_control()], e.g.
+#'   `ecm(dat, model = "cross", control = ecm_control(nodes = 61))`.
+#' @param ... Not used: any other argument is an error before the fit starts. A setting of
+#'   [ecm_control()] (`nodes`, `max_iter`, `tol`, `accelerate`, `verbose`) gets the
+#'   `control = ecm_control(...)` form in the message, and a misspelled name the closest argument.
 #' @return A fitted model with `ecm`: `estimates` (est, se, z, Wald 95% interval on the log scale
 #'   for positive parameters and the Fisher-z scale for the correlation), `logLik`, `npar`,
 #'   `AIC`, `BIC`, `iterations`, `converged`, `trace` (log-likelihood per iteration), `vcov`,

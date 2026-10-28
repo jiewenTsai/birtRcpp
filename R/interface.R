@@ -68,8 +68,19 @@ select_cov <- function(data, type, cov) {
   data
 }
 
+# quantile = for a model without a quantile version: an error, as ecm() gives for quantile =
+check_quantile <- function(model, type, quantile) {
+  if (is.null(quantile) || .model_info[[type]]$qr) {
+    return(invisible())
+  }
+  with_qr <- names(model_types)[model_types %in% names(.model_info)[vapply(.model_info, `[[`, TRUE, "qr")]]
+  stop(sprintf("quantile = is available for model = %s only; model = \"%s\" is a mean model (drop quantile)",
+               paste0("\"", with_qr, "\"", collapse = " or "), model), call. = FALSE)
+}
+
 build_model <- function(data, model, itemtype, speed_var, cov, quantile = NULL, intercept = FALSE) {
   type <- model_type(model)
+  check_quantile(model, type, quantile)
   itemtype <- check_itemtype(itemtype, ncol(data$Y))
   data <- select_cov(data, type, cov)
   new_model(type, data, quantile = quantile, speed_var = speed_var, itemtype = itemtype, intercept = intercept)
@@ -116,14 +127,101 @@ gibbs_control <- function(n_burnin = NULL, n_thin = 1, collapse = FALSE, fit_ind
   list(n_burnin = n_burnin, n_thin = n_thin, collapse = collapse, fit_indices = fit_indices, verbose = verbose)
 }
 
+# ---- arguments that ecm() and gibbs() do not have ------------------------------------------------
+# The `...` of ecm(data, ...) and gibbs(data, ...) takes nothing. Before anything is fitted, an
+# engine setting written directly (ecm(dat, model = "cross", nodes = 61)) is an error that shows
+# the control = form, an argument of the other engine says so, and other names get the closest
+# argument (did you mean ...?).
+
+engine_method <- function(fun) if (fun == "ecm") ecm.input_data else gibbs.input_data
+engine_control <- function(fun) if (fun == "ecm") ecm_control else gibbs_control
+
+# the closest of `candidates` to a misspelled name (n_iter also matches "iter"), or NULL
+closest_name <- function(name, candidates) {
+  squash <- function(x) gsub("[^a-z0-9]", "", tolower(x))
+  variants <- c(candidates, sub("^n_", "", candidates))
+  owners <- c(candidates, candidates)
+  distance <- utils::adist(squash(name), squash(variants))[1, ]
+  best <- which.min(distance)
+  if (distance[best] <= max(1, floor(nchar(name) / 4))) owners[best] else NULL
+}
+
+check_dots <- function(fun, call, dots) {
+  if (!length(dots)) {
+    return(invisible())
+  }
+  other <- if (fun == "ecm") "gibbs" else "ecm"
+  control_fun <- paste0(fun, "_control")
+  own_args <- setdiff(names(formals(engine_method(fun))), c("data", "..."))
+  own_control <- names(formals(engine_control(fun)))
+  other_args <- setdiff(names(formals(engine_method(other))), c("data", "...", own_args, own_control))
+  other_control <- setdiff(names(formals(engine_control(other))), c(own_args, own_control))
+  arg_names <- names(dots) %||% rep("", length(dots))
+  values <- vapply(dots, function(v) paste(deparse(v, width.cutoff = 500L), collapse = " "), "")
+  lines <- character()
+  to_control <- character()                                  # name = value pairs for control = ...()
+  for (i in seq_along(dots)) {
+    name <- arg_names[i]
+    if (!nzchar(name)) {
+      lines <- c(lines, sprintf("unnamed argument %s: name the arguments after data, e.g. model = \"cross\"", values[i]))
+    } else if (name %in% own_control) {
+      to_control <- c(to_control, sprintf("%s = %s", name, values[i]))
+    } else if (name %in% other_args) {
+      lines <- c(lines, sprintf("%s is an argument of %s(), not of %s()", name, other, fun))
+    } else if (name %in% other_control) {
+      lines <- c(lines, sprintf("%s is a setting of %s_control() for %s(), not of %s()", name, other, other, fun))
+    } else {
+      guess <- closest_name(name, c(own_args, own_control))
+      if (is.null(guess)) {
+        lines <- c(lines, sprintf("unknown argument %s; the arguments of %s() are %s (settings in control = %s())", name, fun,
+                                  paste(own_args, collapse = ", "), control_fun))
+      } else if (guess %in% own_control) {
+        lines <- c(lines, sprintf("unknown argument %s; did you mean %s (a setting of %s())?", name, guess, control_fun))
+        to_control <- c(to_control, sprintf("%s = %s", guess, values[i]))
+      } else {
+        lines <- c(lines, sprintf("unknown argument %s; did you mean %s?", name, guess))
+      }
+    }
+  }
+  if (length(to_control)) {
+    direct <- arg_names[arg_names %in% own_control]
+    hint <- control_hint(fun, call, to_control, direct)
+    lines <- if (length(direct)) c(hint, lines) else c(lines, hint)
+  }
+  stop(paste(lines, collapse = "\n"), call. = FALSE)
+}
+
+# "nodes is a setting of ecm_control(): use ecm(dat, model = "cross", control = ecm_control(nodes = 61))",
+# keeping the settings of a control = ecm_control(...) that was given
+control_hint <- function(fun, call, to_control, direct) {
+  control_fun <- paste0(fun, "_control")
+  given <- call$control
+  if (is.call(given) && identical(given[[1]], as.name(control_fun)) && length(given) > 1) {
+    kept <- as.list(given)[-1]
+    kept <- kept[!names(kept) %in% sub(" = .*", "", to_control)]
+    kept_text <- vapply(kept, function(v) paste(deparse(v, width.cutoff = 500L), collapse = " "), "")
+    to_control <- c(sprintf("%s = %s", names(kept), kept_text), to_control)
+  }
+  deparse_arg <- function(x) paste(deparse(x, width.cutoff = 500L), collapse = " ")
+  data_text <- if (is.null(call$data)) "data" else deparse_arg(call$data)
+  model_text <- if (is.null(call$model)) "" else sprintf(", model = %s", deparse_arg(call$model))
+  usage <- sprintf("%s(%s%s, control = %s(%s))", fun, data_text, model_text, control_fun, paste(to_control, collapse = ", "))
+  if (!length(direct)) {
+    return(sprintf("use %s", usage))
+  }
+  what <- if (length(direct) == 1) "is a setting of %s(), not an argument" else "are settings of %s(), not arguments"
+  sprintf("%s %s of %s(): use %s", paste(direct, collapse = ", "), sprintf(what, control_fun), fun, usage)
+}
+
 #' @rdname ecm
 #' @export
 ecm.input_data <- function(data, model = NULL, itemtype = "2pl", speed_var = c("free", "fixed"), cov = NULL,
                            prior = c("ml", "map"), priors = NULL, se = TRUE, control = ecm_control(), ...) {
-  speed_var <- match.arg(speed_var)
   if ("quantile" %in% names(list(...))) {
     stop("ecm() fits the normal models; quantile models use gibbs(data, model = ..., quantile = )", call. = FALSE)
   }
+  check_dots("ecm", match.call(), match.call(expand.dots = FALSE)$...)
+  speed_var <- match.arg(speed_var)
   object <- build_model(data, model, itemtype, speed_var, cov)
   ecm.rtirt(object, max_iter = control$max_iter, tol = control$tol, nodes = control$nodes, se = se,
             prior = prior, priors = priors, accelerate = control$accelerate, verbose = control$verbose, ...)
@@ -150,6 +248,7 @@ attach_ecm <- function(object, fit) {
 gibbs.input_data <- function(data, model = NULL, itemtype = "2pl", speed_var = c("free", "fixed"), quantile = NULL,
                              cov = NULL, intercept = FALSE, priors = NULL, n_iter = 5000, n_chain = 4, seed = NULL,
                              init = "random", control = gibbs_control(), ...) {
+  check_dots("gibbs", match.call(), match.call(expand.dots = FALSE)$...)
   speed_var <- match.arg(speed_var)
   object <- build_model(data, model, itemtype, speed_var, cov, quantile, intercept)
   if (inherits(init, "rtirt")) {

@@ -47,7 +47,8 @@ yet); one value, or one per item (all equal for now).}
 
 \item{quantile}{\code{NULL} for the mean model, or the quantile level of the ALD model
 (\code{"latent"}: of speed given ability and covariates; \code{"cross"}: of each log response
-time). A vector fits one model per level (an \code{rtirt_qset}).}
+time). A vector fits one model per level (an \code{rtirt_qset}). Only \code{"latent"} and
+\code{"cross"} have quantile versions; \verb{quantile =} with another model is an error.}
 
 \item{cov}{Names of the covariates of \code{data} to use (default all); models without
 covariates ignore them.}
@@ -65,9 +66,13 @@ covariates are centred and the item parameters carry the location).}
 fit of the same data and model: start the chains at its estimates and EAP scores, which
 shortens the burn-in; \code{"ecm"}: run \code{\link[=ecm]{ecm()}} first and start there.}
 
-\item{control}{Further sampler settings, from \code{\link[=gibbs_control]{gibbs_control()}}.}
+\item{control}{Further sampler settings, from \code{\link[=gibbs_control]{gibbs_control()}}, e.g.
+\code{gibbs(dat, model = "cross", control = gibbs_control(n_burnin = 500))}.}
 
-\item{...}{Unused.}
+\item{...}{Not used: any other argument is an error before sampling starts. A setting of
+\code{\link[=gibbs_control]{gibbs_control()}} (\code{n_burnin}, \code{n_thin}, \code{collapse}, \code{fit_indices}, \code{verbose}) gets the
+\code{control = gibbs_control(...)} form in the message, and a misspelled name (\code{niter}) the
+closest argument (\code{n_iter}).}
 }
 \value{
 A fitted model with \code{post}: \code{draws} (a \code{coda::mcmc.list} of the item and structural

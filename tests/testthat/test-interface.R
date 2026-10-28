@@ -114,3 +114,47 @@ test_that("ecm() refuses quantile models", {
   dat <- small_data()
   expect_error(ecm(dat, model = "cross", quantile = 0.9), "quantile models use gibbs")
 })
+
+test_that("unknown arguments of ecm() and gibbs() are errors that show the right call", {
+  dat <- small_data()
+  # engine settings: the control = form, with the user's own data and model
+  expect_error(ecm(dat, model = "cross", nodes = 61),
+               "use ecm(dat, model = \"cross\", control = ecm_control(nodes = 61))", fixed = TRUE)
+  expect_error(ecm(dat, model = "cross", max_iter = 5, verbose = TRUE), "are settings of ecm_control()", fixed = TRUE)
+  expect_error(ecm(dat, model = "cross", nodes = 61, control = ecm_control(tol = 1e-6)),
+               "control = ecm_control(tol = 1e-06, nodes = 61)", fixed = TRUE)
+  expect_error(gibbs(dat, model = "cross", n_iter = 50, n_burnin = 10),
+               "control = gibbs_control(n_burnin = 10)", fixed = TRUE)
+  for (name in c("n_thin", "collapse", "fit_indices", "verbose")) {
+    args <- c(list(dat, model = "cross"), stats::setNames(list(TRUE), name))
+    expect_error(do.call(gibbs, args), "gibbs_control(", fixed = TRUE)
+  }
+  # misspelled names: did you mean
+  expect_error(gibbs(dat, model = "cross", niter = 200), "unknown argument niter; did you mean n_iter?", fixed = TRUE)
+  expect_error(gibbs(dat, model = "cross", chains = 1), "did you mean n_chain?", fixed = TRUE)
+  expect_error(ecm(dat, model = "cross", covs = "x1"), "did you mean cov?", fixed = TRUE)
+  expect_error(gibbs(dat, model = "cross", burnin = 50), "control = gibbs_control(n_burnin = 50)", fixed = TRUE)
+  expect_error(ecm(dat, model = "cross", foo = 1), "unknown argument foo; the arguments of ecm() are", fixed = TRUE)
+  # the other engine's arguments
+  expect_error(ecm(dat, model = "cross", n_iter = 100), "n_iter is an argument of gibbs(), not of ecm()", fixed = TRUE)
+  expect_error(gibbs(dat, model = "cross", nodes = 61), "setting of ecm_control() for ecm(), not of gibbs()", fixed = TRUE)
+  # an error, not a warning after the run
+  expect_error(gibbs(dat, model = "cross", niter = 200, n_chain = 1), "niter")
+  # the deprecated interface keeps its arguments
+  fit_old <- suppressWarnings(ecm(rtirt_cross(dat), nodes = 21, se = FALSE))
+  fit_new <- ecm(dat, model = "cross", se = FALSE, control = ecm_control(nodes = 21))
+  expect_equal(estimates(fit_old), estimates(fit_new))
+})
+
+test_that("gibbs() refuses quantile = for models without a quantile version, as ecm() does", {
+  dat <- small_data("latent", n_feat = 1)
+  for (model in c("null", "latreg", "irt")) {
+    expect_error(gibbs(dat, model = model, quantile = 0.9, n_iter = 20),
+                 sprintf("quantile = is available for model = \"latent\" or \"cross\" only; model = \"%s\"", model), fixed = TRUE)
+  }
+  expect_error(gibbs(dat, model = "null", quantile = c(0.25, 0.75)), "\"latent\" or \"cross\" only")
+  expect_error(equations(dat, model = "null", quantile = 0.5), "\"latent\" or \"cross\" only")
+  fit <- gibbs(dat, model = "latent", quantile = 0.9, n_iter = 20, n_chain = 1, seed = 1,
+               control = gibbs_control(verbose = FALSE, fit_indices = FALSE))
+  expect_true(fit$qr)
+})

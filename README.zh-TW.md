@@ -73,7 +73,7 @@ coef(qs); plot(qs)     # rho[item] 對分位數的曲線
 | `GibbsMlIrt`、`GibbsRtIrtNull`、`GibbsRtIrt` | `gibbs(dat, model = "irt")`、`model = "null"`、`model = "latreg"` | 同 Julia 名 |
 | `GibbsRtIrtLatent`、`…Qr` | `gibbs(dat, model = "latent", quantile = NULL / q)` | 同 Julia 名（`Qr` 用 `Cond$q_rt`） |
 | `GibbsRtIrtCross`、`…Qr` | `gibbs(dat, model = "cross", quantile = NULL / q)` | 同 Julia 名 |
-| `sample!(MCMC)` | `fit <- gibbs(model, n_iter = , n_chain = , seed = )` | `sampleGibbs()` |
+| `sample!(MCMC)` | `fit <- gibbs(dat, model = "cross", n_iter = , n_chain = , seed = )` | `sampleGibbs()` |
 | `coef(MCMC)`、`precis(MCMC)` | `summary(fit)`、`precis(fit)` / `estimates(fit)` | — |
 | `getDic`、`checkConvergence` | `dic()` / `fit_indices()`、`convergence()` | 同 Julia 名 |
 | `comparePara`、`runSimulation` | `compare_para`、`run_simulation` | 同 Julia 名 |
@@ -101,7 +101,7 @@ fit <- gibbs(dat, model = "cross", quantile = 0.1, n_iter = 12000, control = gib
 
 - 後驗與原本的抽樣器相同（模擬與 TIMSS 上，所有參數的後驗平均數差異都在蒙地卡羅誤差內）。
 - TIMSS 上各模型的最小 ESS 增為 1.9–7 倍，原本最慢的是困難題的 a、b。換算成每秒是 1.3–5 倍，因為每次迭代多花約 35–50% 時間。
-- 沒有變快的情況：1PL、`rtirt_latreg(speed_var = "fixed")`。預設仍是原本的抽樣器。
+- 沒有變快的情況：1PL、`gibbs(dat, model = "latreg", speed_var = "fixed")`。預設仍是原本的抽樣器。
 
 ## 計算步驟：`algorithm()`
 
@@ -142,8 +142,8 @@ convergence(fit, diagnostics = "rank")   # rank-normalized R̂、bulk / tail ESS
 ## 先驗：`rtirt_priors()`
 
 ```r
-gibbs(model, priors = rtirt_priors(a = c(mean = 1, sd = 0.5), rho = c(sd = 0.3)))
-ecm(model, prior = "map", priors = rtirt_priors(a = c(1, 0.5)))      # 題目參數的先驗
+gibbs(dat, model = "cross", priors = rtirt_priors(a = c(mean = 1, sd = 0.5), rho = c(sd = 0.3)))
+ecm(dat, model = "cross", prior = "map", priors = rtirt_priors(a = c(1, 0.5)))      # 題目參數的先驗
 ```
 
 預設是不依賴資料的一般常用先驗，所有完整條件分配仍是共軛的（純 Gibbs）：
@@ -198,7 +198,7 @@ check_sampler(m, steps = steps); check_ecm(m, steps); check_vi(m)   # 三種檢�
 - **LM（分數）檢定：** `score_test(fit_e, add = Y ~ delta[item] * z)` 只用虛無模型的 ECM 估計，檢定加在 logit（或常態的平均數）上的一項，例如沿組別 z 的 DIF（Glas, 1998；Glas & van der Linden, 2010）；分數用 Fisher identity，資訊用 Louis 公式；整體與逐題（Holm）。
 - **只出現在常態部分、而且線性的人層變項**（例如速度 ζ），ECM 與 CAVI 在給定 θ 時用公式精確積分。
 - **計算：** 式子編成多線性形式，由 C++（RcppArmadillo）計算。
-- **驗證：** 宣告的交叉關係模型和 `gibbs(rtirt_cross())` 的後驗相同（41 個參數，最大差 2.0 個 Monte Carlo 標準誤），和 `ecm(rtirt_cross())` 的估計相同（差 1e-4 以內，標準誤相同）；58 組隨機堆疊的步驟全部正確；CAVI 的平均數接近後驗，但 SD 偏小（平均場的已知性質）。
+- **驗證：** 宣告的交叉關係模型和 `gibbs(dat, model = "cross")` 的後驗相同（41 個參數，最大差 2.0 個 Monte Carlo 標準誤），和 `ecm(dat, model = "cross")` 的估計相同（差 1e-4 以內，標準誤相同）；58 組隨機堆疊的步驟全部正確；CAVI 的平均數接近後驗，但 SD 偏小（平均場的已知性質）。
 - **手寫每一步**（`run_sampler()`、`draw_*()`、`run_em()`、`estep_irt()`/`mstep_items()`）仍保留，用於宣告寫法還沒有的結構；`inst/examples/ex07`–`ex13` 是手寫的文獻範例。
 - 積木教學逐行解釋：第 3 節三種估計法、第 4 節三種檢查、第 6 節作答時間與 cut、第 9 節手寫。
 
@@ -226,8 +226,8 @@ estimates(g, method = "em")      # 抽樣後仍可取出 EM 的表
 **診斷：**
 - `fit$ecm$trace`：每次迭代的 log-likelihood，應該單調上升到平台。
 - `fit$ecm$converged`：是否收斂。
-- 用 `ecm(model, nodes = 61)` 重估一次，log-likelihood 應該幾乎不變，以此檢查積分精度。
-- 有巢套關係的模型（例如 `rtirt_null` 與 `rtirt_latreg`）可以用 `2 * (logLik(m1) - logLik(m0))` 做概似比檢定。
+- 用 `ecm(dat, model = "cross", control = ecm_control(nodes = 61))` 重估一次，log-likelihood 應該幾乎不變，以此檢查積分精度。（`nodes`、`max_iter` 等設定要放在 `control = ecm_control()` 裡；直接寫 `ecm(dat, model = "cross", nodes = 61)` 會報錯並提示正確寫法。）
+- 有巢套關係的模型（例如 `model = "null"` 與 `model = "latreg"`）可以用 `2 * (logLik(m1) - logLik(m0))` 做概似比檢定。
 
 例子與小樣本設定見入門教學第 8 節；同樣的 EM 也可以用宣告的模型寫（積木教學第 3 節）。
 
