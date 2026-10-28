@@ -3,9 +3,11 @@ test_that("a sampler written from the blocks reproduces gibbs() step by step", {
   eval(parse(text = src[1:(grep("^set.seed[(]7[)]", src) - 1)]))
   set.seed(8)
   cond <- set_cond(n_subj = 150, n_item = 5)
-  m <- rtirt_cross(sim_data(cond, sim_para(cond, "cross"), "cross"))
-  r <- cross_sampler(m, n_iter = 300, seed = 2)
-  cpp <- as.matrix(gibbs(m, n_iter = 300, n_chain = 1, seed = 2, verbose = FALSE, fit_indices = FALSE)$post$draws)
+  dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
+  r <- cross_sampler(dat, n_iter = 300, seed = 2)
+  fit <- gibbs(dat, model = "cross", n_iter = 300, n_chain = 1, seed = 2,
+               control = gibbs_control(verbose = FALSE, fit_indices = FALSE))
+  cpp <- as.matrix(fit$post$draws)
   expect_lt(max(abs(r - cpp)), 1e-10)
 })
 
