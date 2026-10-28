@@ -615,6 +615,7 @@ em_table <- function(x, V, E) {
     hi[cor] <- tanh(z + 1.959964 * sz)
   }
   zv <- est / se
+  zv[!zero_null(nm)] <- NA # as sig: no Wald test where 0 is not a meaningful value
   tab <- data.frame(
     parameter = nm, est = unname(est), se = unname(se), z = unname(zv), q025 = unname(lo), q975 = unname(hi),
     sig = sig_flag(nm, lo, hi), row.names = NULL

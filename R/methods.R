@@ -80,7 +80,8 @@ post_mcmc <- function(x) {
 #' intervals never contain 0, and time intensities `lambda`.
 #' `precis()` (the Julia name) prints the same table. `coef()` returns the posterior means
 #' as a named vector. For a model fitted by [ecm()] the table has the maximum likelihood
-#' estimates with standard errors (`est`, `se`, `z`, Wald 95% interval `q025`, `q975`).
+#' estimates with standard errors (`est`, `se`, `z`, Wald 95% interval `q025`, `q975`); `z`,
+#' like `sig`, is `NA` where 0 is not a meaningful value, and `summary()` then shows no z or p.
 #' @param object A sampled model, or one fitted by [ecm()].
 #' @param pars Optional regular expression selecting parameters.
 #' @param method `"auto"` (the Gibbs results when the model was sampled, else the ECM fit),

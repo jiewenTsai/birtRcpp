@@ -201,6 +201,16 @@ test_that("sig marks only parameters where 0 is a meaningful value", {
   expect_identical(is.na(eg$sig), !(grepl("^(b|beta_ability|beta_speed)\\[", eg$parameter) | eg$parameter == "cor_ability_speed"))
   cross <- estimates(ecm(small_data(), model = "cross", se = TRUE))
   expect_true(all(cross$sig[startsWith(cross$parameter, "rho[")] %in% c("", "*")))
+  expect_identical(is.na(e$z), !tested)                              # no Wald z where sig is NA
+  parameters <- summary(fit)$parameters
+  expect_true(all(is.na(parameters$pvalue[!tested])))
+  expect_false(anyNA(parameters$pvalue[tested]))
+})
+
+test_that("gibbs(prior = \"map\") says that prior = is a setting of ecm()", {
+  dat <- small_data("null")
+  expect_error(gibbs(dat, model = "null", prior = "map", n_iter = 20),   # partial match of priors =
+               "prior = \"ml\" or \"map\" is a setting of ecm()", fixed = TRUE)
 })
 
 test_that("ECM fits with extreme estimates or standard errors warn in print() and summary()", {

@@ -52,7 +52,8 @@ for discriminations, variances (\code{sigma2t}, \code{var_speed}), which are pos
 intervals never contain 0, and time intensities \code{lambda}.
 \code{precis()} (the Julia name) prints the same table. \code{coef()} returns the posterior means
 as a named vector. For a model fitted by \code{\link[=ecm]{ecm()}} the table has the maximum likelihood
-estimates with standard errors (\code{est}, \code{se}, \code{z}, Wald 95\% interval \code{q025}, \code{q975}).
+estimates with standard errors (\code{est}, \code{se}, \code{z}, Wald 95\% interval \code{q025}, \code{q975}); \code{z},
+like \code{sig}, is \code{NA} where 0 is not a meaningful value, and \code{summary()} then shows no z or p.
 }
 \references{
 Gelman, A., & Rubin, D. B. (1992). Inference from iterative simulation using
