@@ -29,6 +29,8 @@
 
 \item{...}{Unused.}
 
+\item{model}{A \code{\link[=block_model]{block_model()}}.}
+
 \item{steps}{Steps, as for \code{\link[=gibbs]{gibbs()}} (the same list can be used for both); by default
 Gibbs (conditional maximization) where possible and MALA (gradient) otherwise.}
 

@@ -231,15 +231,12 @@ gibbs <- function(data, ...) UseMethod("gibbs")
 #'
 #' @param data A model object (see [models]), an [ecm()] fit, or an `rtirt_qset` (several
 #'   quantile levels).
-#' @param n_iter,n_chain,n_burnin,n_thin Iterations per chain, chains, burn-in (default
-#'   `n_iter / 2`) and thinning of the stored draws. Defaults: the `cond` of the model
-#'   (5000 iterations, 4 chains when no `cond` was given).
 #' @param seed Random seed (`NULL`: the current RNG state).
-#' @param intercept,itemtype Override the settings of the constructor.
-#' @param verbose,fit_indices,collapse See [gibbs_control()].
-#' @param init `"random"` or `"ecm"`.
-#' @param priors Prior distributions, from [rtirt_priors()].
-#' @param ... Passed to the sampler (`rtirt_qset`); otherwise unused.
+#' @param ... Settings of the sampler: `n_iter`, `n_chain`, `n_burnin` (default `n_iter / 2`) and
+#'   `n_thin`, with defaults from the `cond` of the model (5000 iterations, 4 chains when no `cond`
+#'   was given); `intercept` and `itemtype`, which override the settings of the constructor;
+#'   `verbose`, `fit_indices` and `collapse` (see [gibbs_control()]); `init` (`"random"` or
+#'   `"ecm"`); `priors`, from [rtirt_priors()].
 #' @return The model with `post`, as [gibbs()].
 #' @name gibbs_model
 #' @keywords internal

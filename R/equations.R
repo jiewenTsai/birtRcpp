@@ -33,24 +33,24 @@ tex_esc <- function(x) {
 
 eq_fmt <- function(format) {
   u <- format == "unicode"
-  greek <- c(alpha = "α", beta = "β", gamma = "γ", delta = "δ", epsilon = "ε", zeta = "ζ",
-             eta = "η", theta = "θ", kappa = "κ", lambda = "λ", nu = "ν", xi = "ξ",
-             pi = "π", rho = "ρ", sigma = "σ", tau = "τ", psi = "ψ", mu = "μ", phi = "φ",
-             omega = "ω", iota = "ι", chi = "χ", upsilon = "υ")
-  plus_sup <- if (u) "⁺" else "^{+}"
+  greek <- c(alpha = "\u03b1", beta = "\u03b2", gamma = "\u03b3", delta = "\u03b4", epsilon = "\u03b5", zeta = "\u03b6",
+             eta = "\u03b7", theta = "\u03b8", kappa = "\u03ba", lambda = "\u03bb", nu = "\u03bd", xi = "\u03be",
+             pi = "\u03c0", rho = "\u03c1", sigma = "\u03c3", tau = "\u03c4", psi = "\u03c8", mu = "\u03bc", phi = "\u03c6",
+             omega = "\u03c9", iota = "\u03b9", chi = "\u03c7", upsilon = "\u03c5")
+  plus_sup <- if (u) "\u207a" else "^{+}"
 
   list(u = u, greek = names(greek),
     g = function(n) if (u) greek[[n]] else paste0("\\", n),
     v = function(n) eq_variable(n, u),
     s = function(x, s) if (u) paste0(x, unicode_subscript(s)) else sprintf("%s_{%s}", x, s),
-    sim = if (u) "∼" else "\\sim",
+    sim = if (u) "\u223c" else "\\sim",
     eq = "=",
-    dot = if (u) "·" else "\\,",
-    minus = if (u) "−" else "-",
-    sq = function(x) if (x == "1") "1" else if (u) paste0(x, "²") else paste0(x, "^2"),
+    dot = if (u) "\u00b7" else "\\,",
+    minus = if (u) "\u2212" else "-",
+    sq = function(x) if (x == "1") "1" else if (u) paste0(x, "\u00b2") else paste0(x, "^2"),
     plus_sup = plus_sup,
-    prime = if (u) "′" else "'",
-    inset = if (u) " ∈ " else " \\in ",
+    prime = if (u) "\u2032" else "'",
+    inset = if (u) " \u2208 " else " \\in ",
     N = function(m, v, plus = FALSE) {
       template <- if (u) "N%s(%s, %s)" else "\\mathcal{N}%s(%s, %s)"
       sprintf(template, if (plus) plus_sup else "", m, v)
@@ -63,9 +63,9 @@ eq_fmt <- function(format) {
 
 # Unicode subscript of s, or [s] when a character has no subscript form
 unicode_subscript <- function(s) {
-  subscripts <- c(i = "ᵢ", j = "ⱼ", k = "ₖ", p = "ₚ", `0` = "₀", `1` = "₁", `2` = "₂",
-                  `3` = "₃", `4` = "₄", `5` = "₅", `6` = "₆", `7` = "₇", `8` = "₈", `9` = "₉",
-                  `-` = "₋", `+` = "₊", `,` = ",")
+  subscripts <- c(i = "\u1d62", j = "\u2c7c", k = "\u2096", p = "\u209a", `0` = "\u2080", `1` = "\u2081", `2` = "\u2082",
+                  `3` = "\u2083", `4` = "\u2084", `5` = "\u2085", `6` = "\u2086", `7` = "\u2087", `8` = "\u2088", `9` = "\u2089",
+                  `-` = "\u208b", `+` = "\u208a", `,` = ",")
   chars <- strsplit(as.character(s), "")[[1]]
   if (all(chars %in% names(subscripts))) paste(subscripts[chars], collapse = "") else paste0("[", s, "]")
 }
@@ -85,7 +85,7 @@ eq_variable <- function(n, u) {
 eq_set <- function(items, u) {
   shown <- items
   if (length(items) > 4) {
-    shown <- c(items[1:2], if (u) "…" else "\\ldots", items[length(items)])
+    shown <- c(items[1:2], if (u) "\u2026" else "\\ldots", items[length(items)])
   }
   if (u) {
     return(sprintf("{%s}", paste(shown, collapse = ", ")))
@@ -236,12 +236,12 @@ eq_persons_rtirt <- function(ctx, F) {
   e1 <- F$s("e", "1j")
   e2 <- F$s("e", "2j")
   speed <- paste(c(eq_xb(ctx, F, F$s(F$g("beta"), "2")), paste0("c", F$dot, e1), e2), collapse = " + ")
-  e2_var <- if (ctx$fixed) paste0("1 ", F$minus, " c", if (F$u) "²" else "^2") else "v"
-  correlation <- if (ctx$fixed) "c" else if (F$u) "c / √(c² + v)" else "c / \\sqrt{c^2 + v}"
+  e2_var <- if (ctx$fixed) paste0("1 ", F$minus, " c", if (F$u) "\u00b2" else "^2") else "v"
+  correlation <- if (ctx$fixed) "c" else if (F$u) "c / \u221a(c\u00b2 + v)" else "c / \\sqrt{c^2 + v}"
   correlation_note <- if (ctx$fixed) {
     F$text("Var(speed | x) = 1")
   } else if (F$u) {
-    "var_speed = c² + v"
+    "var_speed = c\u00b2 + v"
   } else {
     "\\text{var\\_speed} = c^2 + v"
   }
@@ -291,7 +291,7 @@ eq_priors <- function(object, ctx, F, ecm_only) {
 eq_prior_fmt <- function(F) {
   num <- function(x) {
     value <- format(signif(x, 3), trim = TRUE, drop0trailing = TRUE)
-    if (F$u) gsub("-", "−", value) else value
+    if (F$u) gsub("-", "\u2212", value) else value
   }
   variance <- function(sd, one = "1") {
     if (sd == 1) {
@@ -313,7 +313,7 @@ eq_prior_fmt <- function(F) {
   }
   # half-t on the SD, IG on the variance
   variance_lhs <- function(v2, v1, family) if (family == "half-t") v1 else v2
-  sq_root <- function(x) if (F$u) paste0("√", x) else sprintf("\\sqrt{%s}", x)
+  sq_root <- function(x) if (F$u) paste0("\u221a", x) else sprintf("\\sqrt{%s}", x)
   list(num = num, var = variance, trunc = truncation, vprior = variance_prior, vlhs = variance_lhs, sqrt = sq_root)
 }
 
@@ -338,7 +338,7 @@ eq_priors_structural <- function(ctx, P, F, pf) {
   }
   if (ctx$eng == "rtirt") {
     if (ctx$fixed) {
-      uniform <- if (F$u) "U(−1, 1)" else "\\mathcal{U}(-1, 1)"
+      uniform <- if (F$u) "U(\u22121, 1)" else "\\mathcal{U}(-1, 1)"
       return(list(eq_line("c", F$sim, uniform, F$text("c = Corr(ability, speed); Metropolis"))))
     }
     return(list(eq_line("c", F$sim, F$N("0", pf$var(P$cov[["sd"]])), ""), speed_var_line("v")))

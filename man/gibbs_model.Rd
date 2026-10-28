@@ -14,21 +14,13 @@
 \item{data}{A model object (see \link{models}), an \code{\link[=ecm]{ecm()}} fit, or an \code{rtirt_qset} (several
 quantile levels).}
 
-\item{...}{Passed to the sampler (\code{rtirt_qset}); otherwise unused.}
+\item{...}{Settings of the sampler: \code{n_iter}, \code{n_chain}, \code{n_burnin} (default \code{n_iter / 2}) and
+\code{n_thin}, with defaults from the \code{cond} of the model (5000 iterations, 4 chains when no \code{cond}
+was given); \code{intercept} and \code{itemtype}, which override the settings of the constructor;
+\code{verbose}, \code{fit_indices} and \code{collapse} (see \code{\link[=gibbs_control]{gibbs_control()}}); \code{init} (\code{"random"} or
+\code{"ecm"}); \code{priors}, from \code{\link[=rtirt_priors]{rtirt_priors()}}.}
 
 \item{seed}{Random seed (\code{NULL}: the current RNG state).}
-
-\item{n_iter, n_chain, n_burnin, n_thin}{Iterations per chain, chains, burn-in (default
-\code{n_iter / 2}) and thinning of the stored draws. Defaults: the \code{cond} of the model
-(5000 iterations, 4 chains when no \code{cond} was given).}
-
-\item{intercept, itemtype}{Override the settings of the constructor.}
-
-\item{verbose, fit_indices, collapse}{See \code{\link[=gibbs_control]{gibbs_control()}}.}
-
-\item{init}{\code{"random"} or \code{"ecm"}.}
-
-\item{priors}{Prior distributions, from \code{\link[=rtirt_priors]{rtirt_priors()}}.}
 }
 \value{
 The model with \code{post}, as \code{\link[=gibbs]{gibbs()}}.

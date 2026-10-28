@@ -47,6 +47,7 @@ vi.default <- function(model, ...) stop("vi() fits declared models: model must c
 #' conditionally conjugate full conditional) and `step_shift()` is skipped.
 #'
 #' @inheritParams ecm.block_model
+#' @param model A [block_model()].
 #' @param verbose Print the ELBO every 25 sweeps.
 #' @param quadrature `"adaptive"` (default): q(person) on nodes centred and scaled per person. `"ba81"`: the same
 #'   nodes for every person (Bock & Aitkin, 1981; default 41, 21 or 11 per latent variable), with the logistic
