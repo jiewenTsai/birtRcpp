@@ -85,11 +85,26 @@ test_that("gibbs() starts from an ecm() fit of the same data and model only", {
   fit <- gibbs(dat, model = "cross", init = fit_ecm, n_iter = 60, n_chain = 1, seed = 1,
                control = gibbs_control(verbose = FALSE, fit_indices = FALSE))
   expect_false(is.null(fit$post))
-  expect_error(gibbs(dat, model = "null", init = fit_ecm, n_iter = 60), "same data, model")
-  expect_error(gibbs(dat, model = "cross", speed_var = "fixed", init = fit_ecm, n_iter = 60), "same data, model")
+  expect_error(gibbs(dat, model = "null", init = fit_ecm, n_iter = 60),
+               "init is an ecm\\(\\) fit of model = \"cross\", but gibbs\\(\\) was asked for model = \"null\"")
+  expect_error(gibbs(dat, model = "cross", speed_var = "fixed", init = fit_ecm, n_iter = 60),
+               "init was fitted with speed_var = \"free\", gibbs\\(\\) was asked for speed_var = \"fixed\".*init = ecm\\(data, model = \"cross\", speed_var = \"fixed\"\\)")
   other <- small_data()
   other$Y[1, 1] <- 1 - other$Y[1, 1]
-  expect_error(gibbs(other, model = "cross", init = fit_ecm, n_iter = 60), "same data, model")
+  expect_error(gibbs(other, model = "cross", init = fit_ecm, n_iter = 60), "init was fitted to other responses")
+  fewer <- input_data(dat$Y[1:100, ], dat$T[1:100, ])
+  expect_error(gibbs(fewer, model = "cross", init = fit_ecm, n_iter = 60), "init was fitted to 150 persons x 5 items, gibbs\\(\\) has 100 x 5")
+  # init with quantile models, init as text, and a fit given as the data
+  expect_error(gibbs(dat, model = "cross", quantile = 0.5, init = fit_ecm, n_iter = 60),
+               "quantile models \\(quantile = 0.5\\) start from random values: drop init")
+  expect_error(gibbs(dat, model = "cross", quantile = c(0.2, 0.8), init = "ecm", n_iter = 60), "drop init")
+  expect_error(gibbs(dat, model = "cross", init = TRUE, n_iter = 60), "init must be \"random\", \"ecm\" or an ecm\\(\\) fit.*not TRUE")
+  fit_upper <- gibbs(dat, model = "cross", init = "ECM", n_iter = 60, n_chain = 1, seed = 1,
+                     control = gibbs_control(verbose = FALSE, fit_indices = FALSE))
+  expect_false(is.null(fit_upper$post))
+  expect_error(gibbs(fit_ecm, model = "cross", n_iter = 60),
+               "first argument of gibbs\\(\\) is the data from input_data\\(\\), not an ecm\\(\\) fit.*gibbs\\(data, model = \"cross\", init = fit\\)")
+  expect_error(ecm(fit_ecm, model = "cross"), "first argument of ecm\\(\\) is the data")
 })
 
 test_that("tables are tibbles with the printed layout kept", {

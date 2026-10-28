@@ -202,7 +202,9 @@ rtirt_cross <- function(data, quantile = NULL, speed_var = c("free", "fixed"), i
 #' @param seed Random seed (`NULL`: the current RNG state).
 #' @param init `"random"` (default): each chain draws its own starting values; an [ecm()]
 #'   fit of the same data and model: start the chains at its estimates and EAP scores, which
-#'   shortens the burn-in; `"ecm"`: run [ecm()] first and start there.
+#'   shortens the burn-in; `"ecm"`: run [ecm()] first and start there. If the fit is of other
+#'   data, another model or other settings, the error says what differs. Quantile models start
+#'   from random values.
 #' @param control Further sampler settings, from [gibbs_control()], e.g.
 #'   `gibbs(dat, model = "cross", control = gibbs_control(n_burnin = 500))`.
 #' @param ... Not used: any other argument is an error before sampling starts. A setting of
@@ -250,10 +252,29 @@ NULL
 #' @rdname gibbs_model
 #' @export
 gibbs.rtirt <- function(data, ...) {
+  refuse_fit_as_data("gibbs", data, names(list(...)))
   if (has_em(data)) {
     deprecate_warn("gibbs(fit, init = \"ecm\")", "gibbs(data, model = ..., init = fit)")
   }
   gibbs_rtirt(data, ...)
+}
+
+# gibbs(fit, model = ...) and ecm(fit, model = ...): the arguments of the current interface with a
+# fit (or a model object) in place of the data
+refuse_fit_as_data <- function(fun, object, arg_names) {
+  new_args <- c("model", "speed_var", "quantile", "cov", "control")
+  if (!any(arg_names %in% new_args)) {
+    return(invisible())
+  }
+  model <- model_name_of(class(object)[1])
+  what <- if (has_em(object)) "an ecm() fit" else if (!is.null(object$post)) "a gibbs() fit" else "a model object"
+  usage <- if (fun == "gibbs" && has_em(object)) {
+    sprintf("to start the chains at this ecm() fit use gibbs(data, model = \"%s\", init = fit)", model)
+  } else {
+    sprintf("use %s(data, model = \"%s\")", fun, model)
+  }
+  stop(sprintf("the first argument of %s() is the data from input_data(), not %s: %s (the data of a fit are fit$data)",
+               fun, what, usage), call. = FALSE)
 }
 
 # the sampler of a model object

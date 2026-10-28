@@ -365,20 +365,85 @@ ecm.input_data <- function(data, model = NULL, itemtype = "2pl", speed_var = c("
             prior = prior, priors = priors, accelerate = control$accelerate, verbose = control$verbose, ...)
 }
 
-# an ecm() fit as the start of gibbs(): it must be the same data and model
+# an ecm() fit as the start of gibbs(): it must be the same data and model; the error says what
+# differs
 attach_ecm <- function(object, fit) {
-  same_model <- identical(class(fit)[1], class(object)[1])
-  same_resp <- identical(fit$data$Y, object$data$Y)
-  same_times <- identical(fit$data$log_t, object$data$log_t)
-  same_cov <- identical(fit$data$X, object$data$X)
-  same_data <- same_resp && same_times && same_cov
-  key <- c("speed_var", "itemtype")
-  same_settings <- identical(fit$settings[key], object$settings[key])
-  if (!same_model || !same_data || !same_settings) {
-    stop("init must be an ecm() fit of the same data, model, speed_var and itemtype", call. = FALSE)
+  problems <- init_differences(object, fit)
+  if (length(problems)) {
+    type <- class(object)[1]
+    stop(sprintf("%s; init must be an ecm() fit of the same data and model: init = ecm(data, %s%s), or init = \"random\"",
+                 paste(problems, collapse = "; "), model_call_text(type), init_settings_text(object)), call. = FALSE)
   }
   object$ecm <- fit$ecm
   object
+}
+
+init_differences <- function(object, fit) {
+  type <- class(object)[1]
+  if (!identical(class(fit)[1], type)) {
+    return(sprintf("init is an ecm() fit of %s, but gibbs() was asked for %s", model_call_text(class(fit)[1]),
+                   model_call_text(type)))
+  }
+  data <- object$data
+  fit_data <- fit$data
+  problems <- character()
+  if (!identical(dim(fit_data$Y), dim(data$Y))) {
+    problems <- c(problems, sprintf("init was fitted to %d persons x %d items, gibbs() has %d x %d", nrow(fit_data$Y),
+                                    ncol(fit_data$Y), nrow(data$Y), ncol(data$Y)))
+  } else {
+    if (!identical(fit_data$Y, data$Y)) problems <- c(problems, "init was fitted to other responses")
+    if (!identical(fit_data$log_t, data$log_t)) problems <- c(problems, "init was fitted to other response times")
+  }
+  fit_cov <- colnames(fit_data$X) %||% character()
+  cov <- colnames(data$X) %||% character()
+  if (!identical(fit_cov, cov)) {
+    cov_text <- function(x) if (length(x)) paste(x, collapse = ", ") else "none"
+    problems <- c(problems, sprintf("init was fitted with the covariates %s, gibbs() uses %s", cov_text(fit_cov), cov_text(cov)))
+  } else if (length(problems) == 0 && !identical(fit_data$X, data$X)) {
+    problems <- c(problems, "init was fitted to other covariate values")
+  }
+  for (key in c("speed_var", "itemtype")) {
+    if (!identical(fit$settings[[key]], object$settings[[key]])) {
+      problems <- c(problems, sprintf("init was fitted with %s = \"%s\", gibbs() was asked for %s = \"%s\"", key,
+                                      fit$settings[[key]], key, object$settings[[key]]))
+    }
+  }
+  problems
+}
+
+# the settings of the model that differ from the defaults, for the init = ecm(...) call
+init_settings_text <- function(object) {
+  settings <- object$settings
+  parts <- c(if (!identical(settings$speed_var, "free")) sprintf(", speed_var = \"%s\"", settings$speed_var),
+             if (!identical(settings$itemtype, "2pl")) sprintf(", itemtype = \"%s\"", settings$itemtype))
+  paste(parts, collapse = "")
+}
+
+# init = of gibbs(): "random", "ecm" (any case) or an ecm() fit; quantile models start at random
+check_init <- function(init, quantile) {
+  quantile_text <- function(what) {
+    sprintf("%s starts the chains of a mean model; quantile models (quantile = %s) start from random values: drop init",
+            what, paste(format(quantile), collapse = ", "))
+  }
+  if (inherits(init, "rtirt")) {
+    if (!has_em(init)) {
+      stop("init must be an ecm() fit, \"random\" or \"ecm\"", call. = FALSE)
+    }
+    if (!is.null(quantile)) {
+      stop(quantile_text("init = <ecm() fit>"), call. = FALSE)
+    }
+    return(init)
+  }
+  if (is.character(init) && length(init) == 1 && !is.na(init) && tolower(init) %in% c("random", "ecm")) {
+    init <- tolower(init)
+    if (init == "ecm" && !is.null(quantile)) {
+      stop(quantile_text("init = \"ecm\""), call. = FALSE)
+    }
+    return(init)
+  }
+  shown <- paste(deparse(init, width.cutoff = 60L)[1], collapse = "")
+  stop(sprintf("init must be \"random\", \"ecm\" or an ecm() fit of the same data and model (init = fit_ecm), not %s",
+               shown), call. = FALSE)
 }
 
 #' @rdname gibbs
@@ -390,13 +455,8 @@ gibbs.input_data <- function(data, model = NULL, itemtype = "2pl", speed_var = c
   control <- as_control(control, "gibbs")
   speed_var <- match.arg(speed_var)
   object <- build_model(data, model, itemtype, speed_var, cov, quantile, intercept)
+  init <- check_init(init, quantile)
   if (inherits(init, "rtirt")) {
-    if (!has_em(init)) {
-      stop("init must be an ecm() fit, \"random\" or \"ecm\"", call. = FALSE)
-    }
-    if (inherits(object, "rtirt_qset")) {
-      stop("quantile models start from random values", call. = FALSE)
-    }
     object <- attach_ecm(object, init)
     init <- "ecm"
   }

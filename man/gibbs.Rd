@@ -64,7 +64,9 @@ covariates are centred and the item parameters carry the location).}
 
 \item{init}{\code{"random"} (default): each chain draws its own starting values; an \code{\link[=ecm]{ecm()}}
 fit of the same data and model: start the chains at its estimates and EAP scores, which
-shortens the burn-in; \code{"ecm"}: run \code{\link[=ecm]{ecm()}} first and start there.}
+shortens the burn-in; \code{"ecm"}: run \code{\link[=ecm]{ecm()}} first and start there. If the fit is of other
+data, another model or other settings, the error says what differs. Quantile models start
+from random values.}
 
 \item{control}{Further sampler settings, from \code{\link[=gibbs_control]{gibbs_control()}}, e.g.
 \code{gibbs(dat, model = "cross", control = gibbs_control(n_burnin = 500))}.}

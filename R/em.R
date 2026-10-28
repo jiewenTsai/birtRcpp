@@ -118,6 +118,7 @@ NULL
 ecm.rtirt <- function(data, max_iter = 1000, tol = 1e-10, nodes = 41, se = TRUE, prior = c("ml", "map"), priors = NULL, accelerate = TRUE,
                       verbose = FALSE, ...) {
   model <- data
+  refuse_fit_as_data("ecm", model, names(list(...)))
   if (length(list(...))) warning("unused arguments: ", paste(names(list(...)), collapse = ", "), call. = FALSE)
   if (isTRUE(model$qr)) stop("ecm() fits the normal models; quantile models use gibbs()", call. = FALSE)
   t0 <- Sys.time()
