@@ -51,7 +51,7 @@ test_that("preknowledge_test() has the right size and detects faster responses o
   d2 <- d; d2$log_t[1:60, 1:6] <- d2$log_t[1:60, 1:6] - 1                 # 60 test takers much faster on the compromised items
   pk2 <- preknowledge_test(ecm(rtirt_null(d2), se = FALSE), compromised = 1:6)
   expect_gte(mean(pk2$p_Lambda_s[1:60] < 0.01), 0.7)
-  expect_error(preknowledge_test(ecm(rtirt_cross(d), se = FALSE), 1:6), "rtirt_null")
+  expect_error(preknowledge_test(ecm(rtirt_cross(d), se = FALSE), 1:6), "model = \"null\"")
 })
 
 test_that("check_ecm() checks the EM of ecm() for every built-in normal model and catches a wrong M-step", {
