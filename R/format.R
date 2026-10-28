@@ -169,3 +169,36 @@ print.rtirt_values <- function(x, digits = 3, ...) {
   out <- NextMethod()
   if (is.numeric(out)) as_rtirt_values(out) else out
 }
+
+# ---- knitr ------------------------------------------------------------------------------------
+
+# In R Markdown and Quarto documents, `df-print: kable` (or `df_print`) prints every data frame
+# with knitr::kable(), which bypasses the print() methods (and their 3 decimals, headings and
+# significance stars). The tables of birtRcpp print as at the console instead.
+knit_print_console <- function(x, ...) {
+  knitr::normal_print(x)
+}
+
+#' @exportS3Method knitr::knit_print
+knit_print.rtirt_tbl <- knit_print_console
+
+#' @exportS3Method knitr::knit_print
+knit_print.rtirt_table <- knit_print_console
+
+#' @exportS3Method knitr::knit_print
+knit_print.rtirt_anova <- knit_print_console
+
+#' @exportS3Method knitr::knit_print
+knit_print.rtirt_ci_test <- knit_print_console
+
+#' @exportS3Method knitr::knit_print
+knit_print.rtirt_score_test <- knit_print_console
+
+#' @exportS3Method knitr::knit_print
+knit_print.rtirt_check <- knit_print_console
+
+#' @exportS3Method knitr::knit_print
+knit_print.em_check <- knit_print_console
+
+#' @exportS3Method knitr::knit_print
+knit_print.block_lm_test <- knit_print_console

@@ -97,3 +97,12 @@ test_that("coef(), reliability() and the tests print 3 decimals", {
   expect_identical(decimals_of(capture.output(print(pk))), 3L)
   expect_s3_class(pk, "data.frame")
 })
+
+test_that("knitr documents print the tables as at the console (not with kable())", {
+  skip_if_not_installed("knitr")
+  fits <- format_fit()
+  est <- estimates(fits$latreg)
+  expect_identical(capture.output(knitr::knit_print(est)), capture.output(print(est)))
+  a <- anova(fits$null, fits$latreg)
+  expect_identical(capture.output(knitr::knit_print(a)), capture.output(print(a)))
+})
