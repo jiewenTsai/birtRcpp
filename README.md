@@ -18,6 +18,7 @@ Chinese; read it in the browser, no Quarto needed) explains every line and every
 
 | You are | Read |
 |---|---|
+| new to R or to IRT | section 0 of the intro tutorial: the data, IRT and response times in plain words, installing, R basics, a first analysis in ten lines |
 | a student or new to these models | the intro tutorial, then the Quick start below |
 | a researcher who wants the methods | the Highlights below and `?ecm`, `?gibbs`, `?algorithm` |
 | coming from ExtendedRtIrtModeling.jl | the Julia names (`?julia_aliases`) and [README.zh-TW.md](README.zh-TW.md) |
