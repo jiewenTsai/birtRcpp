@@ -1,9 +1,11 @@
 # Methods: summary / coef / estimates / scores / reliability / convergence / fit_indices / plot
 # (the accessors of the birt package), plus precis / dic / compare_para of the Julia package.
 
+# the header of print() and summary(): the model as named in ecm() and gibbs(), then its class,
+# e.g. model = "cross", quantile = 0.9 (rtirt_cross)
 model_label <- function(x) {
-  quantile <- if (isTRUE(x$qr)) sprintf(" (quantile %s)", format(x$q)) else ""
-  paste0(class(x)[1], quantile)
+  quantile <- if (isTRUE(x$qr)) sprintf(", quantile = %s", format(x$q)) else ""
+  sprintf("%s%s (%s)", model_call_text(class(x)[1]), quantile, class(x)[1])
 }
 
 #' @export
@@ -11,7 +13,7 @@ print.rtirt <- function(x, ...) {
   data <- x$data
   cond <- x$cond
   covariates <- if (.model_info[[class(x)[1]]]$X) sprintf("; covariates: %s", paste(colnames(data$X), collapse = ", ")) else ""
-  cat(model_label(x), "\n")
+  cat(model_label(x), "\n", sep = "")
   cat(sprintf("  %d persons x %d items%s\n", nrow(data$Y), ncol(data$Y), covariates))
   if (has_em(x)) {
     print_em(x)
@@ -735,7 +737,7 @@ qset_sampled <- function(x) {
 #' @rdname rtirt_qset
 #' @export
 print.rtirt_qset <- function(x, ...) {
-  cat(sprintf("%s at quantiles %s\n", x$type, paste(format(x$quantile), collapse = ", ")))
+  cat(sprintf("%s (%s) at quantiles %s\n", model_call_text(x$type), x$type, paste(format(x$quantile), collapse = ", ")))
   if (!qset_sampled(x)) {
     cat("  not sampled yet: fits <- gibbs(models)\n")
     return(invisible(x))

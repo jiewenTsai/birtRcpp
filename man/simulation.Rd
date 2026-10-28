@@ -13,9 +13,9 @@ sim_data(cond, para, model = sim_models, type = c("norm", "tail", "skew"))
 \arguments{
 \item{cond}{Conditions from \code{\link[=set_cond]{set_cond()}}.}
 
-\item{model}{The model of \code{\link[=ecm]{ecm()}} and \code{\link[=gibbs]{gibbs()}} to simulate from: \code{"cross"}, \code{"latent"},
-\code{"latreg"}, \code{"null"}, or \code{"mlirt"} (the 2PL with a latent regression, \code{model = "irt"} in
-\code{\link[=ecm]{ecm()}} and \code{\link[=gibbs]{gibbs()}}).}
+\item{model}{The model of \code{\link[=ecm]{ecm()}} and \code{\link[=gibbs]{gibbs()}} to simulate from, by the same name:
+\code{"cross"} (default), \code{"latent"}, \code{"latreg"}, \code{"null"} or \code{"irt"} (the 2PL with a latent
+regression; \code{"mlirt"}, its older name, is also accepted). Case does not matter.}
 
 \item{true_corr}{Correlation of ability and speed (\code{"latreg"}, \code{"null"}).}
 

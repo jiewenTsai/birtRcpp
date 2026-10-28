@@ -68,14 +68,14 @@ check_model_data <- function(type, data) {
     stop("data must come from input_data()", call. = FALSE)
   }
   if (info$rt && is.null(data$log_t)) {
-    stop(type, " needs response times: input_data(..., time = )", call. = FALSE)
+    stop(model_call_text(type), " needs response times: input_data(..., time = )", call. = FALSE)
   }
   if (info$X && is.null(data$X)) {
-    stop(type, " needs covariates: input_data(..., cov = )", call. = FALSE)
+    stop(model_call_text(type), " needs covariates: input_data(..., cov = )", call. = FALSE)
   }
   if (!info$X && !is.null(data$X)) {
     hint <- if (info$rt) " (covariate effects on speed: model = \"latent\" or \"latreg\")" else ""
-    warning(sprintf("%s does not use covariates; the %d columns of cov are ignored%s", type, ncol(data$X), hint),
+    warning(sprintf("%s does not use covariates; the %d columns of cov are ignored%s", model_call_text(type), ncol(data$X), hint),
             call. = FALSE)
   }
 }

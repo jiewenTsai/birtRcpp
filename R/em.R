@@ -42,10 +42,17 @@
 #' [gibbs()] regularize such fits.
 #'
 #' @param data Data from [input_data()].
-#' @param model The model by name: `"irt"`, `"null"`, `"latreg"`, `"latent"`, `"cross"` or
-#'   `"mixture"` (not available yet); see [gibbs()].
-#' @param itemtype `"2pl"`, `"1pl"` or `"grm"` (not available yet); one value, or one per item
-#'   (all equal for now).
+#' @param model The model by name (case does not matter):
+#'   * `"irt"`: 2PL, no response times (with covariates: ability regressed on them).
+#'   * `"null"`: responses and times; ability and speed correlated (van der Linden, 2007).
+#'   * `"latreg"`: as `"null"`, with ability and speed regressed on the covariates.
+#'   * `"latent"`: speed regressed on ability and the covariates.
+#'   * `"cross"`: item-specific effects of ability on the log times (cross-relations).
+#'
+#'   A misspelled name gets the closest one in the error message. `"mixture"` (Wang & Xu,
+#'   2015) is not available yet.
+#' @param itemtype `"2pl"` or `"1pl"` (`"grm"` is not available yet); one value, or one per
+#'   item (all equal for now).
 #' @param speed_var `"free"` (default) or `"fixed"` (variance of speed 1; `"null"`,
 #'   `"latreg"`, `"cross"`).
 #' @param cov Names of the covariates of `data` to use (default all); models without

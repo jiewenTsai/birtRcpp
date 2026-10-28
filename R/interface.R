@@ -9,33 +9,85 @@
 model_types <- c(irt = "mlirt", null = "rtirt_null", latreg = "rtirt_latreg",
                  latent = "rtirt_latent", cross = "rtirt_cross", mixture = NA)
 
-model_type <- function(model) {
-  choices <- paste0("\"", names(model_types), "\"", collapse = ", ")
+# one line per available model, for the messages and ?ecm
+model_help <- c(irt = "2PL, no response times (with covariates: ability regressed on them)",
+                null = "responses and times; ability and speed correlated (van der Linden, 2007)",
+                latreg = "as \"null\", with ability and speed regressed on the covariates",
+                latent = "speed regressed on ability and the covariates",
+                cross = "item-specific effects of ability on the log times (cross-relations)")
+
+available_models <- function() names(model_types)[!is.na(model_types)]
+
+# the user-facing name of a model type: "rtirt_cross" -> "cross"
+model_name_of <- function(type) {
+  name <- names(model_types)[match(type, model_types)]
+  if (is.na(name)) type else name
+}
+
+# 'model = "cross"', for headers and messages
+model_call_text <- function(type) sprintf("model = \"%s\"", model_name_of(type))
+
+model_list_text <- function() {
+  available <- available_models()
+  padded <- formatC(sprintf("\"%s\"", available), width = -max(nchar(available) + 2))
+  paste(sprintf("  %s %s", padded, model_help[available]), collapse = "\n")
+}
+
+# the name given as model = : a public name (any case), or an error with the list of models and
+# a did-you-mean
+model_name <- function(model) {
+  available <- available_models()
   if (is.null(model)) {
-    stop(sprintf("name the model: model = one of %s", choices), call. = FALSE)
+    stop(sprintf("name the model: model = one of\n%s", model_list_text()), call. = FALSE)
   }
-  is_name <- is.character(model) && length(model) == 1 && model %in% names(model_types)
-  if (!is_name) {
-    stop(sprintf("model must be one of %s", choices), call. = FALSE)
+  if (!is.character(model) || length(model) != 1 || is.na(model)) {
+    stop(sprintf("model must be one name: one of\n%s", model_list_text()), call. = FALSE)
   }
-  if (model == "mixture") {
+  key <- tolower(trimws(model))
+  if (key == "mixture") {
     stop("model = \"mixture\" (Wang & Xu, 2015) is not available yet", call. = FALSE)
   }
-  model_types[[model]]
+  if (key %in% available) {
+    return(key)
+  }
+  stop(sprintf("unknown model \"%s\"%s\nmodel = one of\n%s", model, model_guess(key, available), model_list_text()),
+       call. = FALSE)
+}
+
+# "; did you mean "cross"?" for a misspelled model, the public name for a class name ("mlirt"),
+# and a pointer to itemtype = for "2pl"
+model_guess <- function(key, available) {
+  class_name <- match(key, model_types)
+  if (!is.na(class_name)) {
+    return(sprintf(": that is the class of model = \"%s\"; did you mean \"%s\"?", names(model_types)[class_name],
+                   names(model_types)[class_name]))
+  }
+  if (key %in% c("2pl", "1pl", "rasch", "grm")) {
+    return(sprintf(": that is an item type (itemtype = \"%s\"); model names the structure, e.g. model = \"irt\" for the 2PL alone",
+                   if (key == "rasch") "1pl" else key))
+  }
+  guess <- closest_name(key, available)
+  if (is.null(guess)) "" else sprintf("; did you mean \"%s\"?", guess)
 }
 
 check_itemtype <- function(itemtype, n_item) {
-  allowed <- c("2pl", "1pl", "grm")
+  allowed <- c("2pl", "1pl")
+  if (is.numeric(itemtype)) {
+    stop(sprintf("itemtype = %s: the third argument of ecm() and gibbs() is itemtype (\"2pl\" or \"1pl\"); name the arguments after model, e.g. n_iter = %s",
+                 itemtype[1], itemtype[1]), call. = FALSE)
+  }
   right_length <- length(itemtype) %in% c(1, n_item)
   if (!is.character(itemtype) || !right_length) {
     stop(sprintf("itemtype must be one value, or one per item (%d)", n_item), call. = FALSE)
   }
-  unknown <- setdiff(itemtype, allowed)
-  if (length(unknown)) {
-    stop(sprintf("unknown itemtype: %s (use \"2pl\", \"1pl\" or \"grm\")", paste(unknown, collapse = ", ")), call. = FALSE)
-  }
+  itemtype <- tolower(itemtype)
   if ("grm" %in% itemtype) {
     stop("itemtype = \"grm\" is not available yet", call. = FALSE)
+  }
+  unknown <- setdiff(itemtype, allowed)
+  if (length(unknown)) {
+    hint <- if ("rasch" %in% unknown) "; the Rasch model is itemtype = \"1pl\"" else ""
+    stop(sprintf("unknown itemtype: %s (use \"2pl\" or \"1pl\")%s", paste(unknown, collapse = ", "), hint), call. = FALSE)
   }
   types <- unique(itemtype)
   if (length(types) > 1) {
@@ -79,7 +131,8 @@ check_quantile <- function(model, type, quantile) {
 }
 
 build_model <- function(data, model, itemtype, speed_var, cov, quantile = NULL, intercept = FALSE) {
-  type <- model_type(model)
+  model <- model_name(model)
+  type <- model_types[[model]]
   check_quantile(model, type, quantile)
   itemtype <- check_itemtype(itemtype, ncol(data$Y))
   data <- select_cov(data, type, cov)

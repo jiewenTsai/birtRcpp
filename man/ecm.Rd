@@ -27,11 +27,20 @@ ecm(data, ...)
 \code{\link[=ecm_control]{ecm_control()}} (\code{nodes}, \code{max_iter}, \code{tol}, \code{accelerate}, \code{verbose}) gets the
 \code{control = ecm_control(...)} form in the message, and a misspelled name the closest argument.}
 
-\item{model}{The model by name: \code{"irt"}, \code{"null"}, \code{"latreg"}, \code{"latent"}, \code{"cross"} or
-\code{"mixture"} (not available yet); see \code{\link[=gibbs]{gibbs()}}.}
+\item{model}{The model by name (case does not matter):
+\itemize{
+\item \code{"irt"}: 2PL, no response times (with covariates: ability regressed on them).
+\item \code{"null"}: responses and times; ability and speed correlated (van der Linden, 2007).
+\item \code{"latreg"}: as \code{"null"}, with ability and speed regressed on the covariates.
+\item \code{"latent"}: speed regressed on ability and the covariates.
+\item \code{"cross"}: item-specific effects of ability on the log times (cross-relations).
+}
 
-\item{itemtype}{\code{"2pl"}, \code{"1pl"} or \code{"grm"} (not available yet); one value, or one per item
-(all equal for now).}
+A misspelled name gets the closest one in the error message. \code{"mixture"} (Wang & Xu,
+2015) is not available yet.}
+
+\item{itemtype}{\code{"2pl"} or \code{"1pl"} (\code{"grm"} is not available yet); one value, or one per
+item (all equal for now).}
 
 \item{speed_var}{\code{"free"} (default) or \code{"fixed"} (variance of speed 1; \code{"null"},
 \code{"latreg"}, \code{"cross"}).}

@@ -40,7 +40,7 @@ fit
 ```
 
 ```
-rtirt_cross 
+model = "cross" (rtirt_cross)
   500 persons x 10 items
   maximum marginal likelihood (ECM, 41 Gauss-Hermite nodes): 14 iterations, 0.8 s
   logLik -8309.032, npar 51, AIC 16720.1, BIC 16935.0
@@ -98,7 +98,7 @@ g
 ```
 
 ```
-rtirt_cross 
+model = "cross" (rtirt_cross)
   500 persons x 10 items
   3 chains x 2000 iterations (burn-in 1000, thin 1); 9.9 s
   Reliability: ability 0.738, speed 0.970
@@ -204,7 +204,7 @@ qs
 ```
 
 ```
-rtirt_cross at quantiles 0.1, 0.5, 0.9
+model = "cross" (rtirt_cross) at quantiles 0.1, 0.5, 0.9
 parameter   q=0.1   q=0.5   q=0.9
 rho[q1]    -0.168  -0.082  -0.203
 rho[q2]     0.113   0.093   0.122

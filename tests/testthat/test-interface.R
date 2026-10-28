@@ -10,7 +10,7 @@ small_data <- function(model = "cross", n_feat = 0) {
 test_that("model names the built-in model and says what is not available", {
   dat <- small_data()
   expect_error(ecm(dat), "name the model")
-  expect_error(ecm(dat, model = "crossed"), "model must be one of")
+  expect_error(ecm(dat, model = "crossed"), "unknown model \"crossed\"")
   expect_error(ecm(dat, model = "mixture"), "not available yet")
   expect_error(gibbs(dat, model = "mixture"), "not available yet")
   expect_error(ecm(dat, model = "cross", itemtype = "grm"), "not available yet")
@@ -19,6 +19,37 @@ test_that("model names the built-in model and says what is not available", {
   expect_error(ecm(dat, model = "cross", itemtype = "3pl"), "unknown itemtype")
   expect_error(ecm(dat$Y, model = "cross"), "input_data")
   expect_error(gibbs(dat$Y, model = "cross"), "input_data")
+})
+
+test_that("model names: any case, did-you-mean, only available models listed, the same names in sim_para()/sim_data()", {
+  dat <- small_data()
+  fit <- ecm(dat, model = "Cross", se = FALSE)
+  expect_equal(estimates(fit), estimates(ecm(dat, model = "cross", se = FALSE)))
+  header <- capture.output(print(fit))[1]
+  expect_equal(header, "model = \"cross\" (rtirt_cross)")
+  expect_error(ecm(dat, model = "crosss"), "did you mean \"cross\"")
+  expect_error(ecm(dat, model = "mlirt"), "class of model = \"irt\"; did you mean \"irt\"")
+  expect_error(ecm(dat, model = "rtirt_cross"), "did you mean \"cross\"")
+  expect_error(ecm(dat, model = "2pl"), "item type \\(itemtype = \"2pl\"\\)")
+  msg <- tryCatch(ecm(dat, model = "foo"), error = conditionMessage)
+  expect_match(msg, "\"latent\" +speed regressed on ability")       # one line per model
+  expect_false(grepl("mixture", msg))                                # only the available ones
+  expect_error(ecm(dat, model = "null", itemtype = "rasch"), "Rasch model is itemtype = \"1pl\"")
+  expect_false(grepl("grm", tryCatch(ecm(dat, model = "null", itemtype = "3pl"), error = conditionMessage)))
+  expect_error(gibbs(dat, "cross", 1000, n_chain = 2), "third argument of ecm\\(\\) and gibbs\\(\\) is itemtype.*n_iter = 1000")
+  # sim_para() and sim_data() take "irt" (and the old "mlirt"), with the same draws
+  cond <- set_cond(n_subj = 50, n_item = 4, n_feat = 1)
+  set.seed(2); para_irt <- sim_para(cond, "irt"); set.seed(2); para_mlirt <- sim_para(cond, "mlirt")
+  expect_identical(para_irt, para_mlirt)
+  set.seed(3); d_irt <- sim_data(cond, para_irt, "irt"); set.seed(3); d_mlirt <- sim_data(cond, para_irt, "mlirt")
+  expect_identical(d_irt, d_mlirt)
+  set.seed(4); default <- sim_para(cond); set.seed(4); cross <- sim_para(cond, "cross")
+  expect_identical(default, cross)
+  expect_error(sim_para(cond, "crosss"), "did you mean \"cross\"")
+  expect_error(sim_para(set_cond(n_subj = 10, n_item = 3), "latreg"), "set n_feat >= 1")
+  gq <- gibbs(dat, model = "cross", quantile = 0.5, n_iter = 20, n_chain = 1, seed = 1,
+              control = gibbs_control(verbose = FALSE, fit_indices = FALSE))
+  expect_match(capture.output(print(gq))[1], "^model = \"cross\", quantile = 0.5 \\(rtirt_cross\\)$")
 })
 
 test_that("itemtype may be given once per item when all are equal", {

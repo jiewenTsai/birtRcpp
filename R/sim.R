@@ -13,9 +13,9 @@
 #' a ~ N+(1, 0.2^2), b ~ N(0, 0.5^2), sigma2t ~ logN(log 0.3, 0.2^2).
 #'
 #' @param cond Conditions from [set_cond()].
-#' @param model The model of [ecm()] and [gibbs()] to simulate from: `"cross"`, `"latent"`,
-#'   `"latreg"`, `"null"`, or `"mlirt"` (the 2PL with a latent regression, `model = "irt"` in
-#'   [ecm()] and [gibbs()]).
+#' @param model The model of [ecm()] and [gibbs()] to simulate from, by the same name:
+#'   `"cross"` (default), `"latent"`, `"latreg"`, `"null"` or `"irt"` (the 2PL with a latent
+#'   regression; `"mlirt"`, its older name, is also accepted). Case does not matter.
 #' @param para True parameters from `sim_para()` with the same `model`.
 #' @param true_corr Correlation of ability and speed (`"latreg"`, `"null"`).
 #' @param type Residual distribution: `"norm"`, `"tail"` (t with 5 df, scaled to the same
@@ -27,15 +27,28 @@
 #' @name simulation
 NULL
 
-sim_models <- c("cross", "latent", "latreg", "null", "mlirt")
+sim_models <- c("cross", "latent", "latreg", "null", "irt")
 models_with_cov <- c("mlirt", "latreg", "latent")
+
+# the model of sim_para(), sim_data() and run_simulation(): a name of ecm() and gibbs() ("irt" or
+# its old name "mlirt"), "cross" when not given; internally "mlirt" for the 2PL
+sim_model_arg <- function(model) {
+  if (identical(model, sim_models)) {
+    return("cross")
+  }
+  if (is.character(model) && length(model) == 1 && tolower(model) == "mlirt") {
+    return("mlirt")
+  }
+  name <- model_name(model)
+  if (name == "irt") "mlirt" else name
+}
 
 # ---- true parameters ---------------------------------------------------------------------
 
 #' @rdname simulation
 #' @export
 sim_para <- function(cond, model = sim_models, true_corr = 0.3) {
-  model <- match.arg(model)
+  model <- sim_model_arg(model)
   n_item <- cond$n_item
   n_feat <- cond$n_feat %||% 0L
   check_sim_cond(cond, model, n_feat)
@@ -57,7 +70,8 @@ check_sim_cond <- function(cond, model, n_feat) {
     stop("set n_subj and n_item in set_cond() for simulations")
   }
   if (model %in% models_with_cov && n_feat < 1) {
-    stop("model '", model, "' needs n_feat >= 1")
+    stop(sprintf("model = \"%s\" has covariates: set n_feat >= 1 in set_cond()", if (model == "mlirt") "irt" else model),
+         call. = FALSE)
   }
 }
 
@@ -135,7 +149,7 @@ as_sim_data <- function(resp, time = NULL, cov = NULL) {
 #' @rdname simulation
 #' @export
 sim_data <- function(cond, para, model = sim_models, type = c("norm", "tail", "skew")) {
-  model <- match.arg(model)
+  model <- sim_model_arg(model)
   type <- match.arg(type)
   n_person <- cond$n_subj
   cov <- if (model %in% models_with_cov) sim_cov(n_person, cond$n_feat) else NULL
@@ -224,7 +238,7 @@ get_corr <- function(est, true) {
 #' @export
 run_simulation <- function(cond, para, model = sim_models, quantile = NULL, pars = c("a", "b", "ability"),
                            type = "norm", speed_var = c("free", "fixed"), ...) {
-  model <- match.arg(model)
+  model <- sim_model_arg(model)
   speed_var <- match.arg(speed_var)
   replications <- seq_len(cond$n_rep)
 

@@ -281,7 +281,7 @@ fit
 
 **輸出怎麼讀**
 
-- 第 1–2 行：模型名稱與資料大小（600 人 × 10 題）。
+- 第 1–2 行：模型名稱與資料大小（600 人 × 10 題）。模型名稱照 `ecm()` 的寫法印成 `model = "cross"`，括號裡的 `rtirt_cross` 是結果物件的類別（class）名稱。
 - 第 3 行：估計方法。
   - `maximum marginal likelihood`：最大邊際概似。
   - 括號裡的 `ECM` 是用來求它的演算法；41 是 Gauss-Hermite 求積點的個數。
@@ -873,7 +873,7 @@ estimates(el, pars = "beta|b_ability")
 
 ```{r mlirt}
 condM <- set_cond(n_subj = 800, n_item = 12, n_feat = 2)
-dataM <- sim_data(condM, sim_para(condM, "mlirt"), "mlirt")
+dataM <- sim_data(condM, sim_para(condM, "irt"), "irt")
 em_m <- ecm(dataM, model = "irt")
 bm <- estimates(em_m, pars = "beta")
 tibble::tibble(parameter = bm$parameter, est = bm$est, se = bm$se, true = attr(dataM, "true_para")$beta)
@@ -882,7 +882,7 @@ tibble::tibble(parameter = bm$parameter, est = bm$est, se = bm$se, true = attr(d
 **逐行說明**
 
 1. 設定 800 人、12 題、2 個共變項。
-2. 模擬資料，只有作答。`sim_data()` 把這個模型叫做 `"mlirt"`（多層次 IRT），`ecm()` 叫它 `"irt"`。
+2. 模擬資料，只有作答。`sim_para()`、`sim_data()` 和 `ecm()` 用同一個名字 `"irt"`（舊的名字 `"mlirt"`，多層次 IRT，也還能用）。
 3. 用 ECM 估計 `"irt"` 模型。
 4. 取出迴歸係數的參數表。
 5. 把估計值、標準誤和真值並排。`attr(dataM, "true_para")` 取出模擬時用的真值。
