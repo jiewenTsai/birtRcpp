@@ -44,4 +44,14 @@ dat <- input_data(resp = Y, time = RT, cov = X)
 
 Item names (the column names of \code{resp}) label all output. Missing values are not
 supported: drop the incomplete persons first.
+
+The data must be in wide format: one row per person, one column per item (for responses
+and for times). Data with one row per person and item (long format, as exported by
+PsychoPy or E-Prime) are refused, recognized by a single item or by ids that repeat on
+most rows; reshape them first, e.g.
+\code{tidyr::pivot_wider(long, id_cols = id, names_from = item, values_from = c(correct, rt))}
+or \code{stats::reshape(long, idvar = "id", timevar = "item", direction = "wide")}. A few
+duplicated ids give a warning. Covariates must be numeric: dummy-code categorical ones
+first, e.g. \code{model.matrix(~ grade, data)[, -1]} (k - 1 columns for k categories), and
+centre them.
 }

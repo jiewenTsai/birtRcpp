@@ -39,8 +39,9 @@ print.sim_cond <- function(x, ...) {
   invisible(x)
 }
 
-# a block of columns: names of columns in `data`, or a matrix / data frame
-get_block <- function(x, data, what) {
+# a block of columns: names of columns in `data`, or a matrix / data frame; `hint` is added to
+# the message about non-numeric columns
+get_block <- function(x, data, what, hint = "") {
   if (is.null(x)) {
     return(NULL)
   }
@@ -57,7 +58,7 @@ get_block <- function(x, data, what) {
   if (is.data.frame(x)) {
     is_number <- vapply(x, function(v) is.numeric(v) || is.logical(v), TRUE)
     if (!all(is_number)) {
-      stop(what, ": non-numeric columns: ", paste(names(x)[!is_number], collapse = ", "), call. = FALSE)
+      stop(what, ": non-numeric columns: ", paste(names(x)[!is_number], collapse = ", "), hint, call. = FALSE)
     }
   }
   x <- as.matrix(x)
@@ -84,6 +85,16 @@ item_names <- function(K) {
 #' Item names (the column names of `resp`) label all output. Missing values are not
 #' supported: drop the incomplete persons first.
 #'
+#' The data must be in wide format: one row per person, one column per item (for responses
+#' and for times). Data with one row per person and item (long format, as exported by
+#' PsychoPy or E-Prime) are refused, recognized by a single item or by ids that repeat on
+#' most rows; reshape them first, e.g.
+#' `tidyr::pivot_wider(long, id_cols = id, names_from = item, values_from = c(correct, rt))`
+#' or `stats::reshape(long, idvar = "id", timevar = "item", direction = "wide")`. A few
+#' duplicated ids give a warning. Covariates must be numeric: dummy-code categorical ones
+#' first, e.g. `model.matrix(~ grade, data)[, -1]` (k - 1 columns for k categories), and
+#' centre them.
+#'
 #' @param resp Binary (0/1) responses, persons x items.
 #' @param time Response times in seconds (positive), same dimensions as `resp`; they are
 #'   log-transformed. Give log times as `log_time` instead.
@@ -105,7 +116,9 @@ input_data <- function(resp, time = NULL, cov = NULL, data = NULL, id = NULL, lo
 
   times <- read_times(time, log_time, data, Y, items)
   X <- read_cov(cov, data, nrow(Y))
+  id_arg <- id
   id <- read_id(id, data, Y)
+  check_wide(Y, id, list(resp = resp, time = time %||% log_time, id = id_arg), data)
 
   dimnames(Y) <- list(NULL, items)
   container <- list(Y = Y, kappa = Y - 0.5, T = times$T, log_t = times$log_t, X = X, items = items, id = id)
@@ -200,7 +213,9 @@ warn_flat_times <- function(log_t, items) {
 
 # covariates: complete, one row per person, named; a warning when they are not centred
 read_cov <- function(cov, data, n_person) {
-  X <- get_block(cov, data, "cov")
+  hint <- paste0("; covariates must be numeric: dummy-code categorical ones first, e.g. model.matrix(~ grade, data)[, -1] ",
+                 "(k - 1 columns for k categories) or data$female <- as.numeric(data$gender == \"F\"), then centre them")
+  X <- get_block(cov, data, "cov", hint)
   if (is.null(X)) {
     return(NULL)
   }
@@ -239,6 +254,55 @@ read_id <- function(id, data, Y) {
     stop(sprintf("id has length %d; resp has %d persons", length(id), n_person))
   }
   id
+}
+
+# one row per person: long data (one row per person x item) show up as one item or as ids that
+# repeat on most rows, and are refused with how to reshape them; a few repeated ids give a warning
+# (scores() returns the ids for merge(), which needs them unique)
+check_wide <- function(Y, id, given, data) {
+  n_row <- nrow(Y)
+  repeated <- duplicated(id)
+  n_id <- sum(!repeated)
+  if (ncol(Y) == 1 || n_id <= n_row / 2) {
+    shape <- sprintf("%d item%s", ncol(Y), if (ncol(Y) > 1) "s" else "")
+    if (any(repeated)) {
+      shape <- sprintf("%s, %d distinct ids on %d rows", shape, n_id, n_row)
+    }
+    id_name <- long_name(given$id, "id")
+    stop(sprintf(paste0("the data look like long format (%s): input_data() needs one row per person and one column per item. ",
+                        "Reshape first, e.g. wide <- %s, then input_data(resp = ..., time = ..., id = \"%s\", data = wide); ",
+                        "or stats::reshape(..., idvar = \"%s\", timevar = \"%s\", direction = \"wide\")"),
+                 shape, long_reshape_call(given, data, id), id_name, id_name, long_item_column(given, data, id)),
+         call. = FALSE)
+  }
+  if (any(repeated)) {
+    shown <- paste(utils::head(unique(id[repeated]), 3), collapse = ", ")
+    warning(sprintf("id has %d repeated value%s (%s): each person should be one row; fix or drop the duplicates (merge(scores(fit), data) by id needs unique ids)",
+                    sum(repeated), if (sum(repeated) > 1) "s" else "", shown), call. = FALSE)
+  }
+}
+
+long_name <- function(x, default) {
+  if (is.character(x) && length(x) == 1) x else default
+}
+
+# the column of `data` that names the item: as many distinct values as rows per person
+long_item_column <- function(given, data, id) {
+  per_id <- max(table(id))
+  if (is.null(data) || per_id < 2) {
+    return("item")
+  }
+  used <- unlist(Filter(is.character, given))
+  candidates <- setdiff(names(data), used)
+  matches <- candidates[vapply(candidates, function(v) length(unique(data[[v]])) == per_id, TRUE)]
+  if (length(matches)) matches[1] else "item"
+}
+
+long_reshape_call <- function(given, data, id) {
+  values <- c(long_name(given$resp, "resp"), if (!is.null(given$time)) long_name(given$time, "rt"))
+  values_text <- if (length(values) > 1) sprintf("c(%s)", paste(values, collapse = ", ")) else values
+  sprintf("tidyr::pivot_wider(data, id_cols = %s, names_from = %s, values_from = %s)", long_name(given$id, "id"),
+          long_item_column(given, data, id), values_text)
 }
 
 #' @export

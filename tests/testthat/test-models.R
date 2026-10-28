@@ -104,6 +104,36 @@ test_that("input_data: column names, ids, and checks", {
   expect_error(suppressWarnings(rtirt_cross(d, quantile = 1.2)), "quantile")
 })
 
+test_that("input_data: long format is refused with how to reshape, repeated ids warn, categorical covariates get a hint", {
+  set.seed(16)
+  n <- 60
+  items <- paste0("q", 1:4)
+  wide <- data.frame(pid = sprintf("P%02d", 1:n), matrix(rbinom(n * 4, 1, 0.5), n, dimnames = list(NULL, items)),
+                     matrix(rlnorm(n * 4, 3), n, dimnames = list(NULL, paste0(items, "_sec"))))
+  long <- data.frame(pid = rep(wide$pid, 4), task = rep(items, each = n),
+                     correct = unlist(wide[items]), rt = unlist(wide[paste0(items, "_sec")]))
+  expect_error(input_data(resp = "correct", time = "rt", id = "pid", data = long),
+               "long format (1 item, 60 distinct ids on 240 rows)", fixed = TRUE)
+  expect_error(input_data(resp = "correct", time = "rt", id = "pid", data = long),
+               "tidyr::pivot_wider(data, id_cols = pid, names_from = task, values_from = c(correct, rt))", fixed = TRUE)
+  expect_error(input_data(resp = "correct", data = long), "long format (1 item)", fixed = TRUE)
+  # ids repeating on most rows, with several response columns
+  stacked <- rbind(wide, wide)
+  expect_error(input_data(resp = items, id = "pid", data = stacked), "60 distinct ids on 120 rows", fixed = TRUE)
+  # a few repeated ids: a warning
+  twice <- wide
+  twice$pid[2] <- twice$pid[1]
+  expect_warning(input_data(resp = items, id = "pid", data = twice), "id has 1 repeated value (P01)", fixed = TRUE)
+  expect_no_warning(input_data(resp = items, id = "pid", data = wide))
+  # categorical covariates: how to dummy-code them
+  wide$gender <- rep(c("F", "M"), n / 2)
+  wide$grade <- factor(rep(1:3, n / 3))
+  expect_error(input_data(resp = items, cov = "gender", data = wide), "cov: non-numeric columns: gender; covariates must be numeric", fixed = TRUE)
+  expect_error(input_data(resp = items, cov = "grade", data = wide), "model.matrix(~ grade, data)[, -1]", fixed = TRUE)
+  dummies <- scale(stats::model.matrix(~ grade, wide)[, -1], scale = FALSE)
+  expect_equal(ncol(input_data(resp = as.matrix(wide[items]), cov = dummies)$X), 2)
+})
+
 test_that("multilevel IRT and dimension checks", {
   set.seed(13)
   cond <- set_cond(n_subj = 800, n_item = 10, n_feat = 2, n_iter = 1000, n_chain = 2)
