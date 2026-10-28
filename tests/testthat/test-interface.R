@@ -370,3 +370,23 @@ test_that("anova() compares ecm() fits of the same data by likelihood ratio, AIC
   expect_equal(criteria$WAIC, c(fit_indices(g0)$WAIC, fit_indices(g1)$WAIC))
   expect_error(anova(g0, f1), "not both")
 })
+
+test_that("gibbs() reports progress: a line at the start, one per chain with the time left; set_cond() says where its MCMC settings go", {
+  dat <- small_data()
+  messages <- character()
+  fit <- withCallingHandlers(
+    gibbs(dat, model = "cross", n_iter = 40, n_chain = 2, seed = 1),
+    message = function(m) {
+      messages <<- c(messages, conditionMessage(m))
+      invokeRestart("muffleMessage")
+    })
+  expect_match(messages[1], "^model = \"cross\": sampling 2 chains x 40 iterations, one after the other; chain 1 of 2")
+  expect_match(messages[2], "^model = \"cross\": chain 1 of 2 done \\([0-9.]+ s\\); about .* left")
+  expect_match(messages[3], "^model = \"cross\": chain 2 of 2 done \\([0-9.]+ s\\)\\n$")
+  expect_match(messages[4], "computing the marginal log-likelihood")
+  quiet <- gibbs(dat, model = "cross", n_iter = 40, n_chain = 2, seed = 1, control = gibbs_control(verbose = FALSE))
+  expect_identical(quiet$post$draws, fit$post$draws)                 # the messages do not touch the draws
+  expect_silent(gibbs(dat, model = "cross", n_iter = 40, n_chain = 1, seed = 1,
+                      control = gibbs_control(verbose = FALSE, fit_indices = FALSE)))
+  expect_output(print(set_cond(n_subj = 10, n_item = 3)), "gibbs\\(data, model = \\.\\.\\.\\) takes n_iter and n_chain")
+})

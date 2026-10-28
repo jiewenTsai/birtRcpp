@@ -569,14 +569,18 @@ g
 
 - `gibbs(dat, model = "cross", ...)`：和 `ecm()` 一樣，給資料與模型的名字。
   - `init = fit`：每條鏈從 ECM 的估計值與 EAP 附近出發。`fit` 必須是同一份資料、同一個模型的 `ecm()` 結果。起點已經在後驗的中心附近，所以 burn-in 可以短一點。
-  - `n_iter = 2000`：每條鏈 2000 次。前一半（1000 次）自動當 burn-in 丟掉；要自己指定，寫 `control = gibbs_control(n_burnin = 500)`。教學裡為了快才設得這麼小，實際分析請用 10000 以上。
+  - `n_iter = 2000`：每條鏈 2000 次。前一半（1000 次）自動當 burn-in 丟掉；要自己指定，寫 `control = gibbs_control(n_burnin = 500)`。教學裡為了快才設得這麼小。實際分析先用預設（`n_iter = 5000`、`n_chain = 4`，不寫就是），再看 `print(g)` 有沒有收斂的警告：有的話把 `n_iter` 加大（例如 10000），直到警告消失。
   - `n_chain = 3`：跑 3 條鏈，才能算 R̂。
   - `seed = 1`：固定亂數，結果可以重現。
 - `g`：印出摘要。
 
 **輸出怎麼讀**
 
-- 在 R 裡直接跑時，會先看到每條鏈跑完的訊息（`chain 1 of 3 done`）。這份文件把這些訊息藏起來了。
+- 在 R 裡直接跑時，會先看到進度訊息（這份文件把它們藏起來了）：
+  - 開始時一行 `model = "cross": sampling 3 chains x 2000 iterations, one after the other; chain 1 of 3 ...`，表示已經在跑；
+  - 每條鏈跑完一行，例如 `chain 1 of 3 done (3.2 s); about 6 s left`：這條鏈花了幾秒、大約還要多久（鏈是一條接一條跑的，所以用跑完的鏈估計）；
+  - 最後一行說正在算 `fit_indices()` 用的邊際概似。
+  - 不想看這些訊息：`control = gibbs_control(verbose = FALSE)`。
 - 第 3 行 `3 chains x 2000 iterations (burn-in 1000, thin 1)`：鏈的設定與總共花了幾秒。`thin 1` 表示每一次都保留。
 - `Reliability`：用後驗算的信度。能力 0.745、速度 0.962，和 ECM 的 0.751、0.966 很接近。
 - `Marginal`：三種貝氏的模型比較指標（DIC、WAIC、LOOIC）。

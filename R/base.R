@@ -4,7 +4,8 @@
 #'
 #' Mirrors `setCond()` of ExtendedRtIrtModeling.jl (Julia argument names are accepted by the
 #' alias [setCond()]). For real data it is not needed: the dimensions come from the data and
-#' the MCMC settings are arguments of [gibbs()]. In simulations it carries the dimensions for
+#' the MCMC settings are arguments of [gibbs()] (`gibbs(data, model = ...)` does not use those
+#' of `set_cond()`). In simulations it carries the dimensions for
 #' [sim_para()] / [sim_data()] and default MCMC settings.
 #'
 #' @param n_subj,n_item,n_feat Numbers of persons, items and covariates (`NULL`: taken from
@@ -36,6 +37,7 @@ print.sim_cond <- function(x, ...) {
   cat("sim_cond\n")
   cat(sprintf("  persons %s, items %s, covariates %s\n", from_data(x$n_subj), from_data(x$n_item), from_data(x$n_feat)))
   cat(sprintf("  %d chains x %d iterations (burn-in %d, thin %d)\n", x$n_chain, x$n_iter, x$n_burnin, x$n_thin))
+  cat("  (MCMC settings for run_simulation() and the Julia aliases; gibbs(data, model = ...) takes n_iter and n_chain)\n")
   invisible(x)
 }
 

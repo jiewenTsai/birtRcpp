@@ -40,7 +40,8 @@ An object of class \code{sim_cond}.
 \description{
 Mirrors \code{setCond()} of ExtendedRtIrtModeling.jl (Julia argument names are accepted by the
 alias \code{\link[=setCond]{setCond()}}). For real data it is not needed: the dimensions come from the data and
-the MCMC settings are arguments of \code{\link[=gibbs]{gibbs()}}. In simulations it carries the dimensions for
+the MCMC settings are arguments of \code{\link[=gibbs]{gibbs()}} (\code{gibbs(data, model = ...)} does not use those
+of \code{set_cond()}). In simulations it carries the dimensions for
 \code{\link[=sim_para]{sim_para()}} / \code{\link[=sim_data]{sim_data()}} and default MCMC settings.
 }
 \examples{

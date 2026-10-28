@@ -319,8 +319,11 @@ gibbs_rtirt <- function(model, n_iter = NULL, n_chain = NULL, n_burnin = NULL, n
   }
 
   start_time <- Sys.time()
+  progress <- gibbs_progress(model, cond, verbose)
   chains <- lapply(seq_len(cond$n_chain), function(chain) {
-    run_gibbs_chain(model, info, design, init, prior_values, chain, verbose)
+    result <- run_gibbs_chain(model, info, design, init, prior_values, chain)
+    progress(chain)
+    result
   })
 
   model$post <- make_post(chains, info, model$qr, cond, model$data$items)
@@ -334,9 +337,43 @@ gibbs_rtirt <- function(model, n_iter = NULL, n_chain = NULL, n_burnin = NULL, n
   model$post$estimates <- NULL
   model$post$estimates <- estimates(model)
   if (fit_indices) {
+    if (verbose) {
+      message(sprintf("%s: computing the marginal log-likelihood for fit_indices() ...", progress_label(model)))
+    }
     model$post$fit <- marginal_fit(model)
   }
   model
+}
+
+# progress messages of gibbs(verbose = TRUE): a line when sampling starts, and one per chain with
+# its time and an estimate of the time left (the chains run one after the other)
+progress_label <- function(model) {
+  quantile <- if (isTRUE(model$qr)) sprintf(", quantile = %s", format(model$q)) else ""
+  paste0(model_call_text(class(model)[1]), quantile)
+}
+
+gibbs_progress <- function(model, cond, verbose) {
+  if (!verbose) {
+    return(function(chain) invisible())
+  }
+  label <- progress_label(model)
+  n_chain <- cond$n_chain
+  message(sprintf("%s: sampling %d chain%s x %d iterations, one after the other; chain 1 of %d ...", label, n_chain,
+                  if (n_chain == 1) "" else "s", cond$n_iter, n_chain))
+  started <- Sys.time()
+  last <- started
+  function(chain) {
+    now <- Sys.time()
+    seconds <- as.numeric(now - last, units = "secs")
+    last <<- now
+    left <- as.numeric(now - started, units = "secs") / chain * (n_chain - chain)
+    left_text <- if (chain < n_chain) sprintf("; about %s left", format_seconds(left)) else ""
+    message(sprintf("%s: chain %d of %d done (%.1f s)%s", label, chain, n_chain, seconds, left_text))
+  }
+}
+
+format_seconds <- function(seconds) {
+  if (seconds < 1) "under 1 s" else if (seconds < 90) sprintf("%.0f s", seconds) else sprintf("%.1f min", seconds / 60)
 }
 
 # MCMC settings: the arguments of gibbs() override those of the model's conditions
@@ -388,7 +425,7 @@ ecm_start <- function(model, settings) {
   model
 }
 
-run_gibbs_chain <- function(model, info, design, init, prior_values, chain, verbose) {
+run_gibbs_chain <- function(model, info, design, init, prior_values, chain) {
   data <- model$data
   cond <- model$cond
   start <- if (init == "ecm") {
@@ -396,13 +433,8 @@ run_gibbs_chain <- function(model, info, design, init, prior_values, chain, verb
   } else {
     initial_values(info$engine, data, design$X, design$fixed)
   }
-  chain_start <- Sys.time()
   result <- call_gibbs_cpp(info$engine, data, model$qr, design, cond, start, prior_values)
   colnames(result$draws) <- par_names(info$engine, data$items, colnames(design$X))
-  if (verbose) {
-    seconds <- as.numeric(Sys.time() - chain_start, units = "secs")
-    message(sprintf("%s: chain %d of %d done (%.1f s)", model_label(model), chain, cond$n_chain, seconds))
-  }
   result
 }
 

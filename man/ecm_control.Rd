@@ -40,7 +40,9 @@ parameter change (unconstrained scale) below \code{sqrt(tol)}.}
 \item{accelerate}{Use SQUAREM.}
 
 \item{verbose}{\code{ecm_control()}: print the log-likelihood every 10 iterations;
-\code{gibbs_control()}: print a line per chain.}
+\code{gibbs_control()}: print the progress: a line when sampling starts, one per chain with its
+time and the time left (the chains run one after the other), and one before the marginal
+log-likelihood of \code{fit_indices} is computed.}
 
 \item{...}{Not used: a name that is not a setting is an error that names the closest
 setting, or the function it belongs to (\code{gibbs_control(n_iter = 200)}: an argument of

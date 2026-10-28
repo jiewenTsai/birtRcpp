@@ -155,7 +155,9 @@ build_model <- function(data, model, itemtype, speed_var, cov, quantile = NULL, 
 #' @param nodes Gauss-Hermite nodes for ability.
 #' @param accelerate Use SQUAREM.
 #' @param verbose `ecm_control()`: print the log-likelihood every 10 iterations;
-#'   `gibbs_control()`: print a line per chain.
+#'   `gibbs_control()`: print the progress: a line when sampling starts, one per chain with its
+#'   time and the time left (the chains run one after the other), and one before the marginal
+#'   log-likelihood of `fit_indices` is computed.
 #' @param n_burnin Burn-in per chain (default `n_iter / 2`).
 #' @param n_thin Thinning of the stored draws.
 #' @param collapse `FALSE` (default): the Gibbs sampler of ExtendedRtIrtModeling.jl, plus the

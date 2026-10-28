@@ -109,7 +109,10 @@ Use summary(), coef(), scores(), estimates(), convergence(), fit_indices(), plot
 ```
 
 `print()` warns when a parameter fails the criteria of `convergence()` (ESS > 400 and R-hat < 1.05),
-or when one chain gives no R-hat; this short run is for illustration, use `n_iter = 10000` or more.
+or when one chain gives no R-hat; this short run is for illustration. In practice start from the
+defaults (`n_iter = 5000`, `n_chain = 4`) and raise `n_iter` (e.g. to 10000) until `print()` gives
+no warning. While sampling, `gibbs()` prints a line when it starts and one per chain with the time
+left (`control = gibbs_control(verbose = FALSE)` turns them off).
 
 ```r
 estimates(g, pars = "^rho")[1:3, ]     # posterior mean, SD, 95% interval, R-hat, ESS
