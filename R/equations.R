@@ -8,8 +8,9 @@
 #' Writes the model as equations, with the parameter names of [summary()] and the priors of
 #' [gibbs()]. The default is Unicode text for the console; `format = "latex"` gives an
 #' `aligned` block for a paper or an appendix (e.g. `writeLines(as.character(equations(fit, "latex")), "model.tex")`).
-#' Works for unfitted models too.
-#' @param object A model object (see [models]), sampled or not, or an `rtirt_qset`.
+#' Works before estimation too: give the data and the model as in [ecm()] and [gibbs()].
+#' @param object A fit of [ecm()] or [gibbs()], data from [input_data()] (with `model`), or a model
+#'   object of the deprecated constructors ([models]) or an `rtirt_qset`.
 #' @param format `"unicode"` or `"latex"`.
 #' @param priors Include the priors (omitted for an [ecm()] fit, unless `prior = "map"`).
 #' @param x An `rtirt_equations` object.
@@ -17,9 +18,9 @@
 #' @return An `rtirt_equations` object (printed); `as.character()` gives the lines.
 #' @examples
 #' cond <- set_cond(n_subj = 100, n_item = 5)
-#' m <- rtirt_cross(sim_data(cond, sim_para(cond, "cross"), "cross"))
-#' equations(m)
-#' equations(m, "latex")
+#' dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
+#' equations(dat, model = "cross")
+#' equations(dat, model = "cross", quantile = 0.25, format = "latex")
 #' @export
 equations <- function(object, ...) {
   UseMethod("equations")

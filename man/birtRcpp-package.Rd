@@ -6,16 +6,19 @@
 \alias{birtRcpp-package}
 \title{birtRcpp: BIvariate Response Time Modeling with 'Rcpp'}
 \description{
-Declare a model with \code{\link[=block_model]{block_model()}} and fit it with \code{\link[=ecm]{ecm()}} (the main estimator), \code{\link[=gibbs]{gibbs()}} or
-\code{\link[=vi]{vi()}}: the same steps for the three engines (\code{\link[=check_ecm]{check_ecm()}}, \code{\link[=check_sampler]{check_sampler()}}, \code{\link[=check_vi]{check_vi()}};
-\code{\link[=algorithm]{algorithm()}}); \code{\link[=mml]{mml()}} maximizes the ECM objective directly. The built-in
-models port ExtendedRtIrtModeling.jl:
+Built-in models of response accuracy and response times (ports of ExtendedRtIrtModeling.jl),
+named by \code{model} and fitted with \code{\link[=ecm]{ecm()}} (the main estimator) or \code{\link[=gibbs]{gibbs()}}; \code{\link[=algorithm]{algorithm()}} and
+\code{\link[=equations]{equations()}} show the steps and the model, \code{\link[=check_ecm]{check_ecm()}} and \code{\link[=check_sampler]{check_sampler()}} check them:
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{dat <- input_data(resp = items, time = times, cov = covs, id = "IDSTUD", data = raw)
-fit <- gibbs(rtirt_cross(dat, quantile = 0.25), n_iter = 10000, n_chain = 3, seed = 1)
-summary(fit); coef(fit); scores(fit); estimates(fit); convergence(fit); fit_indices(fit); plot(fit)
+fit_ecm <- ecm(dat, model = "cross")
+fit <- gibbs(dat, model = "cross", init = fit_ecm, n_iter = 10000, n_chain = 3, seed = 1)
+summary(fit)
+estimates(fit)
+scores(fit)
 }\if{html}{\out{</div>}}
 
+The declarative \code{\link[=block_model]{block_model()}}, \code{\link[=vi]{vi()}} and \code{\link[=mml]{mml()}} are deprecated (they still work).
 The accessors have the names of the birt package. Julia names are aliases (\link{julia_aliases}).
 The generics shared with birt (\code{estimates}, \code{scores}, \code{reliability}, \code{fit_indices}, \code{equations},
 \code{convergence}, \code{score_test}, \code{algorithm}) dispatch to the methods of both packages whichever was attached last: when

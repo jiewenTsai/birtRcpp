@@ -98,3 +98,14 @@ test_that("without the option a deprecation warning is shown once", {
   expect_warning(rtirt_null(dat), class = "deprecatedWarning")
   expect_no_warning(rtirt_null(dat))
 })
+
+test_that("equations() and algorithm() of data and a model name match the old constructors", {
+  dat <- small_data()
+  old_eq <- suppressWarnings(equations(rtirt_cross(dat, quantile = 0.25)))
+  new_eq <- equations(dat, model = "cross", quantile = 0.25)
+  expect_identical(as.character(new_eq), as.character(old_eq))
+  old_alg <- suppressWarnings(algorithm(rtirt_null(dat), method = "ecm", format = "latex"))
+  new_alg <- algorithm(dat, model = "null", method = "ecm", format = "latex")
+  expect_identical(as.character(new_alg), as.character(old_alg))
+  expect_error(equations(dat), "model")
+})

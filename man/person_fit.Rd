@@ -36,9 +36,12 @@ or a speed that changes during the test. Normal log times only (not \code{rtirt_
 \donttest{
 cond <- set_cond(n_subj = 300, n_item = 10)
 d <- sim_data(cond, sim_para(cond, "cross"), "cross")
-f <- gibbs(rtirt_null(d), n_iter = 2000, n_chain = 2, seed = 1, verbose = FALSE,
-           fit_indices = FALSE)
-pf <- person_fit(f); attr(pf, "share")        # close to 0 under the model
+f <- gibbs(d,
+  model = "null", n_iter = 2000, n_chain = 2, seed = 1,
+  control = gibbs_control(verbose = FALSE, fit_indices = FALSE)
+)
+pf <- person_fit(f)
+attr(pf, "share") # close to 0 under the model
 }
 }
 \references{

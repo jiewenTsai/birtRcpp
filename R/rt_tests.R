@@ -27,9 +27,12 @@
 #' \donttest{
 #' cond <- set_cond(n_subj = 300, n_item = 10)
 #' d <- sim_data(cond, sim_para(cond, "cross"), "cross")
-#' f <- gibbs(rtirt_null(d), n_iter = 2000, n_chain = 2, seed = 1, verbose = FALSE,
-#'            fit_indices = FALSE)
-#' pf <- person_fit(f); attr(pf, "share")        # close to 0 under the model
+#' f <- gibbs(d,
+#'   model = "null", n_iter = 2000, n_chain = 2, seed = 1,
+#'   control = gibbs_control(verbose = FALSE, fit_indices = FALSE)
+#' )
+#' pf <- person_fit(f)
+#' attr(pf, "share") # close to 0 under the model
 #' }
 #' @export
 person_fit <- function(object, flag = 0.95, ...) {
@@ -77,7 +80,7 @@ person_fit <- function(object, flag = 0.95, ...) {
 #' @examples
 #' cond <- set_cond(n_subj = 500, n_item = 8)
 #' d <- sim_data(cond, sim_para(cond, "cross"), "cross")
-#' ci_test(ecm(rtirt_null(d), se = FALSE))
+#' ci_test(ecm(d, model = "null", se = FALSE))
 #' @export
 ci_test <- function(object, ...) {
   if (is.null(object$ecm) || !.model_info[[class(object)[1]]]$rt) {
@@ -170,7 +173,7 @@ print.rtirt_ci_test <- function(x, digits = 3, ...) {
 #' @examples
 #' cond <- set_cond(n_subj = 400, n_item = 20)
 #' d <- sim_data(cond, sim_para(cond, "null"), "null")
-#' pk <- preknowledge_test(ecm(rtirt_null(d), se = FALSE), compromised = 1:5)
+#' pk <- preknowledge_test(ecm(d, model = "null", se = FALSE), compromised = 1:5)
 #' colMeans(pk[c("p_chi_pf", "p_Lambda_s", "p_L_s")] < 0.01)    # about .01 under the model
 #' @export
 preknowledge_test <- function(object, compromised, ...) {

@@ -33,7 +33,7 @@ A positive \code{delta} means that correct responses took longer than incorrect 
 \examples{
 cond <- set_cond(n_subj = 500, n_item = 8)
 d <- sim_data(cond, sim_para(cond, "cross"), "cross")
-ci_test(ecm(rtirt_null(d), se = FALSE))
+ci_test(ecm(d, model = "null", se = FALSE))
 }
 \references{
 van der Linden, W. J., & Glas, C. A. W. (2010). Statistical tests of conditional

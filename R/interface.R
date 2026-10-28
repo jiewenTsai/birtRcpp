@@ -166,3 +166,27 @@ gibbs.input_data <- function(data, model = NULL, itemtype = "2pl", speed_var = c
   sampler <- if (inherits(object, "rtirt_qset")) gibbs.rtirt_qset else gibbs_rtirt
   do.call(sampler, args)
 }
+
+#' @rdname equations
+#' @param model,itemtype,speed_var,quantile,cov,intercept For `input_data`: the model as in
+#'   [ecm()] and [gibbs()], so its equations can be read before estimation, e.g.
+#'   `equations(dat, model = "cross", quantile = 0.25)`.
+#' @export
+equations.input_data <- function(object, model = NULL, itemtype = "2pl", speed_var = c("free", "fixed"), quantile = NULL,
+                                 cov = NULL, intercept = FALSE, format = c("unicode", "latex"), priors = TRUE, ...) {
+  speed_var <- match.arg(speed_var)
+  unfitted <- build_model(object, model, itemtype, speed_var, cov, quantile, intercept)
+  equations(unfitted, format = format, priors = priors)
+}
+
+#' @rdname algorithm
+#' @param model,itemtype,speed_var,quantile,cov,intercept For `input_data`: the model as in
+#'   [ecm()] and [gibbs()], e.g. `algorithm(dat, model = "cross", method = "ecm")`.
+#' @export
+algorithm.input_data <- function(object, model = NULL, itemtype = "2pl", speed_var = c("free", "fixed"), quantile = NULL,
+                                 cov = NULL, intercept = FALSE, method = NULL, collapse = NULL,
+                                 format = c("unicode", "latex"), ...) {
+  speed_var <- match.arg(speed_var)
+  unfitted <- build_model(object, model, itemtype, speed_var, cov, quantile, intercept)
+  algorithm(unfitted, method = method, collapse = collapse, format = format)
+}

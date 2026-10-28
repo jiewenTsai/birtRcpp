@@ -126,13 +126,14 @@ posterior SD can pass), so passing is evidence, not proof.
 \examples{
 \donttest{
 cond <- set_cond(n_subj = 100, n_item = 3)
-m <- rtirt_cross(sim_data(cond, sim_para(cond, "cross"), "cross"))
-narrow <- rtirt_priors(lambda = c(mean = 0, sd = 1))           # any proper prior; narrow mixes fast
-check_sampler(m, n_iter = 1e5, priors = narrow, seed = 1)        # Geweke
-check_sampler(m, method = "sbc", n_rep = 100, priors = narrow, seed = 1)
+dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
+fit <- ecm(dat, model = "cross", se = FALSE) # the model to check (its fit is not used)
+narrow <- rtirt_priors(lambda = c(mean = 0, sd = 1)) # any proper prior; narrow mixes fast
+check_sampler(fit, n_iter = 1e5, priors = narrow, seed = 1) # Geweke
+check_sampler(fit, method = "sbc", n_rep = 100, priors = narrow, seed = 1)
 # a wrong prior in the sampler is detected
 wrong <- rtirt_priors(lambda = c(mean = 0, sd = 1), a = c(mean = 1, sd = 0.3))
-check_sampler(m, n_iter = 2e4, priors = narrow, sampler_priors = wrong, seed = 1)
+check_sampler(fit, n_iter = 2e4, priors = narrow, sampler_priors = wrong, seed = 1)
 }
 }
 \references{

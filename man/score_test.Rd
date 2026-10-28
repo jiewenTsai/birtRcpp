@@ -79,7 +79,7 @@ moderator with clustered persons is refused.
 \donttest{
 cond <- set_cond(n_subj = 400, n_item = 8)
 dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
-fit <- ecm(rtirt_cross(dat), se = FALSE)
+fit <- ecm(dat, model = "cross", se = FALSE)
 score_test(fit, rbinom(400, 1, 0.5) == 1, by_item = TRUE)      # a random grouping: no DIF
 score_test(fit, rowSums(dat$log_t))                            # along the total log time
 }

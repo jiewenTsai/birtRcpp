@@ -37,7 +37,7 @@ Models with the speed entering as \eqn{\lambda_i - \zeta_j} (\code{\link[=rtirt_
 \examples{
 cond <- set_cond(n_subj = 400, n_item = 20)
 d <- sim_data(cond, sim_para(cond, "null"), "null")
-pk <- preknowledge_test(ecm(rtirt_null(d), se = FALSE), compromised = 1:5)
+pk <- preknowledge_test(ecm(d, model = "null", se = FALSE), compromised = 1:5)
 colMeans(pk[c("p_chi_pf", "p_Lambda_s", "p_L_s")] < 0.01)    # about .01 under the model
 }
 \references{

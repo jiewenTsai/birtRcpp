@@ -10,8 +10,10 @@
 #' distribution in the order of one iteration (with `collapse = TRUE` the partially collapsed
 #' version), for [ecm()] the E- and M-steps. The prior constants of the fit are substituted into
 #' the formulas, and each step names the building block that draws it ([blocks]), so a step can
-#' be run, replaced or checked from R. Works for unfitted models too.
-#' @param object A model object (see [models]), sampled or not, or an `rtirt_qset`.
+#' be run, replaced or checked from R. Works before estimation too: give the data and the model as
+#' in [ecm()] and [gibbs()].
+#' @param object A fit of [ecm()] or [gibbs()], data from [input_data()] (with `model`), or a model
+#'   object of the deprecated constructors ([models]) or an `rtirt_qset`.
 #' @param method `"gibbs"` or `"ecm"`; by default the method of the fit (`"gibbs"` for an unfitted
 #'   model).
 #' @param collapse For `"gibbs"`: the partially collapsed sampler; by default the setting of the
@@ -22,11 +24,11 @@
 #' @seealso [equations()] for the model, [blocks] for the steps as R functions.
 #' @examples
 #' cond <- set_cond(n_subj = 100, n_item = 5)
-#' m <- rtirt_cross(sim_data(cond, sim_para(cond, "cross"), "cross"))
-#' algorithm(m)                       # Gibbs full conditionals
-#' algorithm(m, collapse = TRUE)      # partially collapsed Gibbs
-#' algorithm(m, method = "ecm")       # ECM steps
-#' algorithm(m, format = "latex")
+#' dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
+#' algorithm(dat, model = "cross") # Gibbs full conditionals
+#' algorithm(dat, model = "cross", collapse = TRUE) # partially collapsed Gibbs
+#' algorithm(dat, model = "cross", method = "ecm") # ECM steps
+#' algorithm(dat, model = "cross", format = "latex")
 #' @export
 algorithm <- function(object, ...) UseMethod("algorithm")
 

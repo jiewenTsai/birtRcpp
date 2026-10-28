@@ -1,14 +1,17 @@
 #' birtRcpp: BIvariate Response Time Modeling with 'Rcpp'
 #'
-#' Declare a model with [block_model()] and fit it with [ecm()] (the main estimator), [gibbs()] or
-#' [vi()]: the same steps for the three engines ([check_ecm()], [check_sampler()], [check_vi()];
-#' [algorithm()]); [mml()] maximizes the ECM objective directly. The built-in
-#' models port ExtendedRtIrtModeling.jl:
+#' Built-in models of response accuracy and response times (ports of ExtendedRtIrtModeling.jl),
+#' named by `model` and fitted with [ecm()] (the main estimator) or [gibbs()]; [algorithm()] and
+#' [equations()] show the steps and the model, [check_ecm()] and [check_sampler()] check them:
 #' ```
 #' dat <- input_data(resp = items, time = times, cov = covs, id = "IDSTUD", data = raw)
-#' fit <- gibbs(rtirt_cross(dat, quantile = 0.25), n_iter = 10000, n_chain = 3, seed = 1)
-#' summary(fit); coef(fit); scores(fit); estimates(fit); convergence(fit); fit_indices(fit); plot(fit)
+#' fit_ecm <- ecm(dat, model = "cross")
+#' fit <- gibbs(dat, model = "cross", init = fit_ecm, n_iter = 10000, n_chain = 3, seed = 1)
+#' summary(fit)
+#' estimates(fit)
+#' scores(fit)
 #' ```
+#' The declarative [block_model()], [vi()] and [mml()] are deprecated (they still work).
 #' The accessors have the names of the birt package. Julia names are aliases ([julia_aliases]).
 #' The generics shared with birt (`estimates`, `scores`, `reliability`, `fit_indices`, `equations`,
 #' `convergence`, `score_test`, `algorithm`) dispatch to the methods of both packages whichever was attached last: when
