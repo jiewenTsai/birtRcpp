@@ -11,6 +11,23 @@
 #' estimates(fit)
 #' scores(fit)
 #' ```
+#'
+#' **To start, these are all you need** (the other help pages are for diagnostics, simulation,
+#' the building blocks of the samplers, the Julia names and deprecated functions):
+#'
+#' | step | function |
+#' |---|---|
+#' | data | [input_data()] |
+#' | fit | [ecm()] (seconds; estimates, standard errors, AIC, BIC), [gibbs()] (the posterior) |
+#' | results | `summary()`, [estimates()], [scores()], [reliability()] |
+#' | compare models | `anova()` ([anova.rtirt()]), [fit_indices()] |
+#' | check a Gibbs fit | [convergence()], `plot(fit, "trace")` ([plot.rtirt()]) |
+#' | settings | [ecm_control()], [gibbs_control()], [rtirt_priors()] |
+#' | write up | [equations()] (the model, also in LaTeX) |
+#'
+#' The tutorial (Traditional Chinese) explains every line:
+#' <https://github.com/jiewenTsai/birtExamples/blob/main/birtRcpp/tutorial/birtRcpp_intro.md>.
+#'
 #' The declarative [block_model()], [vi()] and [mml()] are deprecated (they still work).
 #' The accessors have the names of the birt package. Julia names are aliases ([julia_aliases]).
 #' The generics shared with birt (`estimates`, `scores`, `reliability`, `fit_indices`, `equations`,
@@ -19,7 +36,6 @@
 #' @useDynLib birtRcpp, .registration = TRUE
 #' @importFrom Rcpp evalCpp
 #' @rawNamespace export(estimates.rtirt, estimates.rtirt_qset, scores.rtirt, reliability.rtirt, fit_indices.rtirt, convergence.rtirt, score_test.rtirt)
-#' @keywords internal
 "_PACKAGE"
 
 shared_generics <- c("estimates", "scores", "reliability", "fit_indices", "convergence", "equations", "score_test", "algorithm")

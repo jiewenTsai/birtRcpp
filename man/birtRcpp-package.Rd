@@ -17,6 +17,23 @@ summary(fit)
 estimates(fit)
 scores(fit)
 }\if{html}{\out{</div>}}
+}
+\details{
+\strong{To start, these are all you need} (the other help pages are for diagnostics, simulation,
+the building blocks of the samplers, the Julia names and deprecated functions):\tabular{ll}{
+   step \tab function \cr
+   data \tab \code{\link[=input_data]{input_data()}} \cr
+   fit \tab \code{\link[=ecm]{ecm()}} (seconds; estimates, standard errors, AIC, BIC), \code{\link[=gibbs]{gibbs()}} (the posterior) \cr
+   results \tab \code{summary()}, \code{\link[=estimates]{estimates()}}, \code{\link[=scores]{scores()}}, \code{\link[=reliability]{reliability()}} \cr
+   compare models \tab \code{anova()} (\code{\link[=anova.rtirt]{anova.rtirt()}}), \code{\link[=fit_indices]{fit_indices()}} \cr
+   check a Gibbs fit \tab \code{\link[=convergence]{convergence()}}, \code{plot(fit, "trace")} (\code{\link[=plot.rtirt]{plot.rtirt()}}) \cr
+   settings \tab \code{\link[=ecm_control]{ecm_control()}}, \code{\link[=gibbs_control]{gibbs_control()}}, \code{\link[=rtirt_priors]{rtirt_priors()}} \cr
+   write up \tab \code{\link[=equations]{equations()}} (the model, also in LaTeX) \cr
+}
+
+
+The tutorial (Traditional Chinese) explains every line:
+\url{https://github.com/jiewenTsai/birtExamples/blob/main/birtRcpp/tutorial/birtRcpp_intro.md}.
 
 The declarative \code{\link[=block_model]{block_model()}}, \code{\link[=vi]{vi()}} and \code{\link[=mml]{mml()}} are deprecated (they still work).
 The accessors have the names of the birt package. Julia names are aliases (\link{julia_aliases}).
@@ -37,4 +54,3 @@ Useful links:
 \strong{Maintainer}: Jie-Wen Tsai \email{tsai.jiewen@gmail.com}
 
 }
-\keyword{internal}

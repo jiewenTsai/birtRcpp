@@ -22,7 +22,9 @@ execute:
 
 ## 0. 這份教學怎麼讀
 
-**給誰看：** 會用 R、學過 IRT（知道鑑別度、難度是什麼）的研究生。不需要會寫 MCMC。
+**給誰看：** 會用 R、知道 2PL 的鑑別度與難度是什麼的讀者（大學部高年級以上）。不需要會寫 MCMC。
+
+**2PL 一段複習：** 能力 θ 的人答對第 i 題的機率是 P = 1 / (1 + exp(−aᵢ(θ − bᵢ)))。難度 bᵢ 是答對機率剛好 50% 的能力；鑑別度 aᵢ 是這條曲線在 bᵢ 附近有多陡（a 愈大，愈能分出能力高低）。想多讀一點：de Ayala 的 *The Theory and Practice of Item Response Theory* 裡講 2PL 的那一章。
 
 **會學到什麼：** 用 birtRcpp 現成的模型，分析「作答對錯」加上「作答時間」的資料。主線只有四步：
 
@@ -1107,6 +1109,113 @@ aggregate(cbind(bias, rmse, corr) ~ par, data = res, FUN = mean)
 
 ## 11. 用真實資料
 
+### 從 CSV 到報告（可以直接執行）
+
+實驗軟體（PsychoPy、E-Prime）匯出的資料常常是：一列一個「人 × 題」（長格式）、時間是毫秒、組別是文字、還有幾個遺漏值。下面先做一份這樣的 CSV，再一步一步整理成 `input_data()` 要的樣子，最後估計並把結果接回原始資料。
+
+```{r csv-make}
+set.seed(11)
+condE <- set_cond(n_subj = 300, n_item = 8, n_feat = 1)
+simE <- sim_data(condE, sim_para(condE, "latreg"), "latreg")
+people <- data.frame(
+  pid = sprintf("S%03d", 1:300), group = sample(c("A", "B", "C"), 300, replace = TRUE),
+  anxiety = round(50 + 10 * simE$X[, 1])
+)
+long <- data.frame(
+  pid = rep(people$pid, 8), item = rep(sprintf("q%d", 1:8), each = 300),
+  correct = c(simE$Y), rt_ms = round(1000 * c(simE$T))
+)
+long$rt_ms[c(5, 777)] <- NA
+long <- merge(long, people, by = "pid")
+csv_file <- tempfile(fileext = ".csv")
+write.csv(long, csv_file, row.names = FALSE)
+```
+
+**逐行說明**
+
+1. 模擬 300 人、8 題、1 個共變項的 `"latreg"` 資料（作答、秒數、焦慮）。
+2. `people`：每人一列的背景資料。`group` 是隨機抽的 A、B、C 三組（文字），`anxiety` 是焦慮分數（平均約 50）。
+3. `long`：一列一個「人 × 題」，`correct` 是對錯，`rt_ms` 是毫秒。`c(simE$Y)` 把「人 × 題」的矩陣按欄拉成一長串，所以 `pid` 用 `rep()` 重複 8 次、`item` 每題重複 300 次。
+4. 故意放兩個遺漏的時間。
+5. 把背景資料併進來，寫成暫存的 CSV 檔。你自己的資料從這裡之後開始。
+
+```{r csv-reshape}
+raw_long <- read.csv(csv_file)
+head(raw_long, 3)
+wide <- reshape(raw_long[c("pid", "item", "correct", "rt_ms")],
+  idvar = "pid", timevar = "item", direction = "wide"
+)
+names(wide) <- sub("^correct\\.", "", names(wide))
+wide <- merge(wide, people, by = "pid")
+items <- paste0("q", 1:8)
+times <- paste0("rt_ms.q", 1:8)
+wide[times] <- wide[times] / 1000
+wide <- wide[stats::complete.cases(wide[c(items, times)]), ]
+nrow(wide)
+```
+
+**逐行說明**
+
+1. 讀入 CSV。
+2. 看前 3 列：一列一個「人 × 題」。直接把它給 `input_data()` 會報錯（第 12 節「長格式」）。
+3. `reshape(..., direction = "wide")`：長轉寬。`idvar` 是人的 ID，`timevar` 是題目欄，其他欄（`correct`、`rt_ms`）每題變成一欄，欄名是 `correct.q1`、`rt_ms.q1`……（裝了 tidyr 的話，`tidyr::pivot_wider()` 也可以，`input_data()` 的錯誤訊息裡有寫法）。
+4. 把 `correct.q1` 改名成 `q1`。`sub()` 把開頭的 `correct.` 換成空字串；`\\.` 是「句點本身」。
+5. 把每人一列的背景資料併回來。
+6. 作答欄與時間欄的名字。
+7. 毫秒除以 1000 變成秒。不換也能估，只是 λ 會多 log 1000 ≈ 6.9（第 12 節「時間單位」）。
+8. 刪掉有遺漏的人（`complete.cases()` 是「這一列沒有 NA」）。
+
+**輸出怎麼讀**
+
+- `head()`：長格式，`pid` 重複出現。
+- `nrow(wide)`：298。兩個遺漏的時間在兩個不同的人，所以剩 298 人。
+
+```{r csv-covariates}
+groups <- stats::model.matrix(~group, wide)[, -1]
+wide$groupB_c <- groups[, "groupB"] - mean(groups[, "groupB"])
+wide$groupC_c <- groups[, "groupC"] - mean(groups[, "groupC"])
+wide$anxiety_z <- as.numeric(scale(wide$anxiety))
+datE <- input_data(
+  resp = items, time = times, cov = c("anxiety_z", "groupB_c", "groupC_c"),
+  id = "pid", data = wide
+)
+datE
+```
+
+**逐行說明**
+
+1. 組別的虛擬編碼：`model.matrix(~group, wide)` 做出截距、`groupB`、`groupC` 三欄（A 是參照組），`[, -1]` 去掉截距。三組要兩個欄位。
+2. 兩個虛擬變項各自置中（第 3 節：模型沒有截距，共變項要置中）。
+3. 焦慮標準化（置中再除以 SD），係數就是「焦慮多 1 個 SD」的效果。
+4. 建立資料，三個共變項。
+
+**輸出怎麼讀：** 298 人、8 題、有作答時間、3 個共變項。
+
+```{r csv-fit}
+fitE <- ecm(datE, model = "latreg")
+fitE0 <- ecm(datE, model = "null")
+anova(fitE0, fitE)
+estimates(fitE, pars = "beta")
+report <- merge(people, scores(fitE), by.x = "pid", by.y = "id")
+head(report, 3)
+```
+
+**逐行說明**
+
+1. 能力與速度各自對三個共變項做迴歸（`"latreg"`）。
+2. 沒有共變項的 `"null"` 模型。
+3. 概似比檢定：三個共變項（對能力 3 個、對速度 3 個係數）合起來有沒有用（第 4 節）。
+4. 只看迴歸係數，報告用的表就是這一張。
+5. 把每個人的能力、速度接回背景資料。`scores()` 的 `id` 就是 `input_data(id = "pid")` 給的 ID，所以用 `by.x = "pid", by.y = "id"` 合併。
+
+**輸出怎麼讀**
+
+- `anova()`：`Df` 是 6（6 個迴歸係數），p 值很小：共變項有用。
+- `estimates()`：`beta_ability[...]` 是對能力的效果、`beta_speed[...]` 是對速度的效果。`groupB_c` 是「B 組比 A 組」，`groupC_c` 是「C 組比 A 組」。`sig` 有 `*` 的，95% 區間不含 0。
+- `report`：一列一人，背景資料加上 `ability`、`speed` 與它們的後驗 SD，可以接著畫圖或做其他分析。
+
+### TIMSS 的例子（沒有執行）
+
 下面這段沒有執行，因為資料檔不在套件裡。先用 ECM 看結果，再用 Gibbs 估分位數模型。
 
 ```r
@@ -1159,7 +1268,7 @@ summary(fq)
 | 舊程式用 `rtirt_cross(dat)` 這類函數 | 還能用，但會警告。改成 `ecm(dat, model = "cross")`、`gibbs(dat, model = "cross")`；`gibbs(fit, init = "ecm")` 改成 `gibbs(dat, model = "cross", init = fit)`；`nodes`、`max_iter` 等改放進 `ecm_control()`，`n_burnin`、`collapse`、`verbose`、`fit_indices` 改放進 `gibbs_control()` |
 | 舊程式用 `em()`、`check_em()` | 改名了：`ecm()`、`check_ecm()`。`map = TRUE` 改成 `prior = "map"`，`Q =` 改成 `ecm_control(nodes = )`，`fit$em` 改成 `fit$ecm` |
 | 估計前想看模型的式子 | `equations(dat, model = "cross")`；演算法的步驟：`algorithm(dat, model = "cross")` |
-| 想看抽樣器每一步在算什麼 | `algorithm(fit)`，見第二份教學 |
+| 想看抽樣器每一步在算什麼 | `algorithm(fit)`，見第二份教學；只想看有哪些步驟（不看公式）：`algorithm(fit, detail = FALSE)` |
 
 ## 附錄 A：從 Julia 版搬過來
 
@@ -1180,6 +1289,8 @@ summary(fq)
 ## 附錄 B：怎麼確定結果是對的（進階）
 
 ### 檢查 Gibbs 抽樣器：`check_sampler()`
+
+**這是給方法開發者驗證抽樣器程式碼的工具，和你的資料無關；檢查你自己的分析有沒有收斂，請用 `convergence()` 與 `plot(g, "trace")`（第 5 節）。**
 
 一個 Gibbs 抽樣器正確，代表它抽到的是對的後驗。Geweke（2004）的檢查法是這樣：
 

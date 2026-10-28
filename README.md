@@ -12,15 +12,31 @@ full conditionals; the Julia function names are kept as aliases.
 
 中文版（完整說明）：[README.zh-TW.md](README.zh-TW.md)
 
+**Start here.** The [birtRcpp intro tutorial](https://github.com/jiewenTsai/birtExamples/blob/main/birtRcpp/tutorial/birtRcpp_intro.md) (Traditional
+Chinese; read it in the browser, no Quarto needed) explains every line and every output; the
+[vignette](vignettes/birtRcpp.Rmd) is the short English version.
+
+| You are | Read |
+|---|---|
+| a student or new to these models | the intro tutorial, then the Quick start below |
+| a researcher who wants the methods | the Highlights below and `?ecm`, `?gibbs`, `?algorithm` |
+| coming from ExtendedRtIrtModeling.jl | the Julia names (`?julia_aliases`) and [README.zh-TW.md](README.zh-TW.md) |
+| coming from older birtRcpp code | the deprecation messages and `NEWS.md` |
+
 ## Installation
 
 ```r
 # install.packages("remotes")
-remotes::install_github("jiewenTsai/birtRcpp")   # from GitHub; needs a C++ compiler
+remotes::install_github("jiewenTsai/birtRcpp", build_vignettes = TRUE)   # needs a C++ compiler
 install.packages("birtRcpp")                       # from CRAN, once released
 ```
 
 A C++ compiler means Rtools on Windows and the Xcode command line tools on macOS.
+`build_vignettes = TRUE` installs `vignette("birtRcpp")`; without it `install_github()` skips
+the vignette and `vignette("birtRcpp")` says "not found" (read it on GitHub instead).
+`library(birtRcpp)` reports that `vi` masks `utils::vi`: that is the deprecated `vi()`
+(variational Bayes) of birtRcpp, and `utils::vi()` (an editor) is still there under its full
+name.
 
 ## Quick start
 
@@ -172,6 +188,7 @@ Priors:
 
 ```r
 algorithm(g)          # the full conditionals of one Gibbs iteration, in order (excerpt)
+                      # algorithm(g, detail = FALSE): the steps only
 ```
 
 ```
@@ -412,10 +429,12 @@ accessors `summary()`, `coef()`, `estimates()`, `scores()`, `reliability()`, `co
 
 ## Documentation
 
-- `vignette("birtRcpp")`: getting started.
-- Two tutorials in `inst/tutorial/` (Traditional Chinese, every line and output explained):
-  `birtRcpp_intro.qmd` (the built-in models) and `birtRcpp_blocks.qmd` (declaring models and
-  composing samplers and EM algorithms).
+- `vignette("birtRcpp")`: getting started (installed with `build_vignettes = TRUE`; also
+  [on GitHub](vignettes/birtRcpp.Rmd)).
+- The [intro tutorial](https://github.com/jiewenTsai/birtExamples/blob/main/birtRcpp/tutorial/birtRcpp_intro.md) (Traditional Chinese, every line
+  and output explained; its source is `inst/tutorial/birtRcpp_intro.qmd`). The second tutorial,
+  `birtRcpp_blocks.qmd` (declaring models and composing samplers and EM algorithms), covers
+  the deprecated `block_model()`.
 - `system.file("examples", package = "birtRcpp")`: 13 scripts, from the quick start to testlet,
   multidimensional, LNIRT, variable-speed and preknowledge models composed from the blocks.
 - [birtExamples](https://github.com/jiewenTsai/birtExamples): tutorials and examples.

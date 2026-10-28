@@ -44,6 +44,25 @@ dat <- input_data(resp = paste0("y", 1:8), time = paste0("t", 1:8), cov = c("x1"
 dat
 ```
 
+Data from an experiment program often come in long format (one row per person and item),
+with times in milliseconds, text responses and categorical covariates. `input_data()` refuses
+long data and text responses with the code to fix them; the steps are:
+
+```r
+wide <- reshape(long[c("pid", "item", "correct", "rt_ms")], idvar = "pid", timevar = "item",
+                direction = "wide")                       # one row per person
+wide <- merge(wide, unique(long[c("pid", "group")]), by = "pid")   # person-level columns back
+items <- paste0("correct.q", 1:8); times <- paste0("rt_ms.q", 1:8)   # names made by reshape()
+wide[times] <- wide[times] / 1000                         # milliseconds -> seconds (only lambda changes)
+wide <- wide[stats::complete.cases(wide[c(items, times)]), ]   # complete data only
+groups <- stats::model.matrix(~ group, wide)[, -1]        # k - 1 dummies for k groups
+wide[colnames(groups)] <- scale(groups, scale = FALSE)    # centred
+dat <- input_data(resp = items, time = times, cov = colnames(groups), id = "pid", data = wide)
+```
+
+Section 11 of the intro tutorial runs this from a CSV file to a table of the regression
+coefficients and person scores merged back into the data.
+
 ## Maximum likelihood with ECM
 
 ECM integrates ability over Gauss-Hermite nodes and speed in closed form. Each M step is
@@ -100,8 +119,9 @@ qs
 ```
 
 Use longer chains in practice (the defaults are `n_iter = 5000`, `n_chain = 4`) and check
-`convergence()`. The tutorial `system.file("tutorial", "birtRcpp_intro.qmd", package = "birtRcpp")`
-(in Traditional Chinese) explains every line and output.
+`convergence()`. The [intro tutorial](https://github.com/jiewenTsai/birtExamples/blob/main/birtRcpp/tutorial/birtRcpp_intro.md)
+(in Traditional Chinese; read it in the browser) explains every line and output; its source is
+`system.file("tutorial", "birtRcpp_intro.qmd", package = "birtRcpp")`.
 
 ## References
 
