@@ -390,3 +390,13 @@ test_that("gibbs() reports progress: a line at the start, one per chain with the
                       control = gibbs_control(verbose = FALSE, fit_indices = FALSE)))
   expect_output(print(set_cond(n_subj = 10, n_item = 3)), "gibbs\\(data, model = \\.\\.\\.\\) takes n_iter and n_chain")
 })
+
+test_that("check_sampler(), check_ecm() and the Julia constructors given data say what they take", {
+  dat <- small_data()
+  expect_error(check_sampler(dat, model = "cross"), "check_sampler\\(\\) checks the sampler of a fit, not data: check_sampler\\(ecm\\(dat, model = \"cross\", se = FALSE\\)\\)")
+  expect_error(check_sampler(dat), "convergence\\(\\) and plot\\(fit, \"trace\"\\)")
+  expect_error(check_ecm(dat, model = "latreg"), "check_ecm\\(ecm\\(dat, model = \"latreg\"\\)\\)")
+  expect_error(GibbsRtIrtCross(dat), "takes the conditions first.*GibbsRtIrtCross\\(set_cond\\(\\), dat\\). In R: gibbs\\(dat, model = \"cross\"\\)")
+  expect_error(GibbsMlIrt(dat), "gibbs\\(dat, model = \"irt\"\\)")
+  expect_s3_class(GibbsRtIrtCross(set_cond(), dat), "rtirt_cross")
+})

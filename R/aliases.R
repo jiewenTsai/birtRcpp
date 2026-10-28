@@ -50,40 +50,56 @@ InputData4R <- function(Y, kappa = Y - 0.5, logT = NULL, X = NULL) input_data(re
 #' @export
 InputPara <- function(...) input_para(...)
 
+# GibbsRtIrtCross(dat): the Julia constructors take the conditions first
+julia_args <- function(name, model, Cond, no_data) {
+  if (no_data) {
+    given <- if (inherits(Cond, "input_data")) "only data were given; " else ""
+    stop(sprintf("%s(Cond, Data) takes the conditions first, as in Julia: %s%s(set_cond(), dat). In R: gibbs(dat, model = \"%s\")",
+                 name, given, name, model), call. = FALSE)
+  }
+}
+
 tp_of <- function(truePara, Data) if (is.null(truePara)) attr(Data, "true_para") else truePara
 #' @rdname julia_aliases
 #' @export
 GibbsMlIrt <- function(Cond, Data, truePara = NULL, Para = NULL) {
+  julia_args("GibbsMlIrt", "irt", Cond, missing(Data))
   new_model("mlirt", Data, Cond, tp_of(truePara, Data), Para)
 }
 #' @rdname julia_aliases
 #' @export
 GibbsRtIrtNull <- function(Cond, Data, truePara = NULL, Para = NULL) {
+  julia_args("GibbsRtIrtNull", "null", Cond, missing(Data))
   new_model("rtirt_null", Data, Cond, tp_of(truePara, Data), Para, speed_var = "fixed")
 }
 #' @rdname julia_aliases
 #' @export
 GibbsRtIrt <- function(Cond, Data, truePara = NULL, Para = NULL) {
+  julia_args("GibbsRtIrt", "latreg", Cond, missing(Data))
   new_model("rtirt_latreg", Data, Cond, tp_of(truePara, Data), Para, speed_var = "fixed")
 }
 #' @rdname julia_aliases
 #' @export
 GibbsRtIrtLatent <- function(Cond, Data, truePara = NULL, Para = NULL) {
+  julia_args("GibbsRtIrtLatent", "latent", Cond, missing(Data))
   new_model("rtirt_latent", Data, Cond, tp_of(truePara, Data), Para)
 }
 #' @rdname julia_aliases
 #' @export
 GibbsRtIrtLatentQr <- function(Cond, Data, truePara = NULL, Para = NULL) {
+  julia_args("GibbsRtIrtLatentQr", "latent", Cond, missing(Data))
   new_model("rtirt_latent", Data, Cond, tp_of(truePara, Data), Para, quantile = Cond$q_rt)
 }
 #' @rdname julia_aliases
 #' @export
 GibbsRtIrtCross <- function(Cond, Data, truePara = NULL, Para = NULL) {
+  julia_args("GibbsRtIrtCross", "cross", Cond, missing(Data))
   new_model("rtirt_cross", Data, Cond, tp_of(truePara, Data), Para, speed_var = "fixed")
 }
 #' @rdname julia_aliases
 #' @export
 GibbsRtIrtCrossQr <- function(Cond, Data, truePara = NULL, Para = NULL) {
+  julia_args("GibbsRtIrtCrossQr", "cross", Cond, missing(Data))
   new_model("rtirt_cross", Data, Cond, tp_of(truePara, Data), Para, quantile = Cond$q_rt, speed_var = "fixed")
 }
 

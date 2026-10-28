@@ -114,6 +114,11 @@ check_sampler <- function(model = NULL, method = c("geweke", "sbc"), n_persons =
                           collapse = NULL, itemtype = NULL, priors = rtirt_priors(), sampler_priors = priors,
                           probs = c(0.1, 0.25, 0.5, 0.75, 0.9), n_prior = 1e5, seed = NULL, steps = NULL, monitor = NULL,
                           step = NULL, prior = NULL, simulate = NULL, ...) {
+  if (inherits(model, "input_data") || inherits(method, "input_data") || (is.character(model) && length(model) == 1)) {
+    name <- if (is.character(model)) model else "cross"
+    stop(sprintf("check_sampler() checks the sampler of a fit, not data: check_sampler(ecm(dat, model = \"%s\", se = FALSE)). It checks the sampler code; for the convergence of your analysis use convergence() and plot(fit, \"trace\")",
+                 name), call. = FALSE)
+  }
   method <- match.arg(method)
   if (!is.null(step)) {
     if (!is.function(prior) || !is.function(simulate) || !length(monitor)) {

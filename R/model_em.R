@@ -894,6 +894,10 @@ print.block_model_ecm <- function(x, ...) {
 #' @export
 check_ecm <- function(model = NULL, steps = NULL, latent = NULL, nodes = NULL, prior = c("map", "ml"), n_start = 10,
                      data = NULL, init = NULL, step = NULL, loglik = NULL, positive = character(), seed = NULL, quadrature = c("adaptive", "ba81")) {
+  if (inherits(model, "input_data") || inherits(steps, "input_data") || (is.character(model) && length(model) == 1)) {
+    name <- if (is.character(model)) model else "cross"
+    stop(sprintf("check_ecm() checks the ECM steps of a fit, not data: check_ecm(ecm(dat, model = \"%s\"))", name), call. = FALSE)
+  }
   if (!is.null(seed)) set.seed(seed)
   rows <- list()
   add <- function(check, worst, limit, detail) rows[[length(rows) + 1]] <<- data.frame(check = check, worst = worst, limit = limit,
