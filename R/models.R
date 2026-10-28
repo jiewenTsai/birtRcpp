@@ -367,13 +367,13 @@ gibbs_progress <- function(model, cond, verbose) {
     seconds <- as.numeric(now - last, units = "secs")
     last <<- now
     left <- as.numeric(now - started, units = "secs") / chain * (n_chain - chain)
-    left_text <- if (chain < n_chain) sprintf("; about %s left", format_seconds(left)) else ""
+    left_text <- if (chain == n_chain) "" else if (left < 1) "; under 1 s left" else sprintf("; about %s left", format_seconds(left))
     message(sprintf("%s: chain %d of %d done (%.1f s)%s", label, chain, n_chain, seconds, left_text))
   }
 }
 
 format_seconds <- function(seconds) {
-  if (seconds < 1) "under 1 s" else if (seconds < 90) sprintf("%.0f s", seconds) else sprintf("%.1f min", seconds / 60)
+  if (seconds < 90) sprintf("%.0f s", seconds) else sprintf("%.1f min", seconds / 60)
 }
 
 # MCMC settings: the arguments of gibbs() override those of the model's conditions
