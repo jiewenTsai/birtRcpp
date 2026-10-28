@@ -31,15 +31,25 @@ print.rtirt <- function(x, ...) {
     looic <- if (is.na(fit$LOOIC)) "" else sprintf(", LOOIC %.1f", fit$LOOIC)
     cat(sprintf("  Marginal: DIC %.1f (pD %.1f), WAIC %.1f%s\n", fit$DIC, fit$pD, fit$WAIC, looic))
   }
-  rh_warn(x)
+  convergence_warn(x)
   cat("Use summary(), coef(), scores(), estimates(), convergence(), fit_indices(), plot().\n")
   invisible(x)
 }
 
-rh_warn <- function(x) {
-  max_rhat <- suppressWarnings(max(estimates(x)$rhat, na.rm = TRUE))
-  if (is.finite(max_rhat) && max_rhat > 1.05) {
-    cat(sprintf("  Warning: max R-hat %.2f > 1.05; see convergence()\n", max_rhat))
+# the warning lines of print(): the criteria of convergence() (ESS > 400 and R-hat < 1.05 for
+# every parameter that varies), and a note that one chain gives no R-hat; `level` names the
+# quantile of a model in an rtirt_qset
+convergence_warn <- function(x, level = "") {
+  check <- convergence_check(x)
+  where <- if (nzchar(level)) sprintf(" (%s)", level) else ""
+  if (check$n_chain < 2) {
+    cat(sprintf("  Warning%s: 1 chain, so R-hat cannot be computed (it needs n_chain >= 2); see convergence()\n", where))
+  }
+  if (check$share < 1) {
+    max_rhat <- suppressWarnings(max(check$table$rhat, na.rm = TRUE))
+    rhat_text <- if (is.finite(max_rhat)) sprintf("max R-hat %.2f, ", max_rhat) else ""
+    cat(sprintf("  Warning%s: only %.1f%% of %d parameters have ESS > %d and R-hat < %.2f (%smin ESS %d); run longer (n_iter) or see convergence()\n",
+                where, 100 * check$share, check$n, check$ess, check$rhat, rhat_text, min(check$table$ess, na.rm = TRUE)))
   }
 }
 
@@ -466,14 +476,48 @@ complete_loglik <- function(object) {
 #' R-hat below `rhat` (over independent chains), and the worst parameters. With
 #' `diagnostics = "rank"` (see [estimates()]) both the bulk and the tail ESS must exceed `ess`,
 #' and the default R-hat threshold is 1.01 (Vehtari et al., 2021) instead of 1.05.
+#' Parameters that do not vary (fixed ones) are left out. With one chain R-hat cannot be
+#' computed and only the ESS is checked. `print()` of a [gibbs()] fit warns with the same
+#' criteria (default thresholds) when a parameter fails them.
 #' Julia: `checkConvergence()`.
-#' @param object A sampled model.
+#'
+#' For several quantile levels (an `rtirt_qset` from `gibbs(..., quantile = c(.25, .75))`)
+#' each level is checked; the model of one level is `fits$models[[k]]`.
+#' @param object A sampled model, an `rtirt_qset`, or an [ecm()] fit (whether ECM converged).
 #' @param ess,rhat Thresholds (`rhat` defaults to 1.05, or 1.01 with `diagnostics = "rank"`).
 #' @param diagnostics `"classic"` or `"rank"`, as in [estimates()].
+#' @param x An `rtirt_convergence` object.
 #' @param ... Unused.
+#' @return An object of class `rtirt_convergence`, printed by its `print()` method: `share`
+#'   (share of parameters that pass), `worst` (the five parameters with the largest R-hat, or
+#'   the smallest ESS with one chain), `n` (parameters checked), `n_chain` and the thresholds;
+#'   for an ECM fit `converged` and `iterations`; for an `rtirt_qset` one such object per level
+#'   (`levels`) with `quantile`.
+#' @examples
+#' \donttest{
+#' cond <- set_cond(n_subj = 200, n_item = 6)
+#' dat <- sim_data(cond, sim_para(cond, "null"), "null")
+#' fit <- gibbs(dat, model = "null", n_iter = 1000, n_chain = 2, seed = 1)
+#' check <- convergence(fit)   # printed only when not assigned
+#' check
+#' check$share
+#' }
 #' @export
 convergence <- function(object, ...) {
   UseMethod("convergence")
+}
+
+# ESS above `ess` and R-hat below `rhat` for each parameter that varies (R-hat is NA with one chain)
+convergence_check <- function(object, ess = 400, rhat = NULL, diagnostics = "classic") {
+  rank <- diagnostics == "rank"
+  rhat <- rhat %||% if (rank) 1.01 else 1.05
+  table <- estimates(object, diagnostics = diagnostics)
+  varies <- !is.na(table$ess) & (if ("sd" %in% names(table)) table$sd > 0 else TRUE)
+  table <- table[varies, , drop = FALSE]
+  tail_ok <- if (!"ess_tail" %in% names(table)) TRUE else table$ess_tail > ess
+  ok <- table$ess > ess & (is.na(table$rhat) | table$rhat < rhat) & tail_ok
+  list(table = table, ok = ok, share = if (length(ok)) mean(ok) else 1, n = nrow(table), ess = ess, rhat = rhat,
+       rank = rank, n_chain = coda::nchain(object$post$draws))
 }
 
 #' @rdname convergence
@@ -481,25 +525,55 @@ convergence <- function(object, ...) {
 convergence.rtirt <- function(object, ess = 400, rhat = NULL, diagnostics = c("classic", "rank"), ...) {
   if (has_em(object)) {                                                # an ECM fit: the iterations, not chains
     fit <- object$ecm
-    status <- if (fit$converged) "converged" else "NOT converged"
-    cat(sprintf("ECM: %s in %d iterations (relative change of the objective below tol)\n", status, fit$iterations))
-    return(invisible(list(converged = fit$converged, iterations = fit$iterations)))
+    return(structure(list(converged = fit$converged, iterations = fit$iterations), class = "rtirt_convergence"))
   }
+  need_post(object)
   diagnostics <- match.arg(diagnostics)
-  rank <- diagnostics == "rank"
-  rhat <- rhat %||% if (rank) 1.01 else 1.05
-  table <- estimates(object, diagnostics = diagnostics)
-  tail_ok <- if (!"ess_tail" %in% names(table)) TRUE else table$ess_tail > ess
-  ok <- table$ess > ess & (is.na(table$rhat) | table$rhat < rhat) & tail_ok
+  check <- convergence_check(object, ess, rhat, diagnostics)
+  table <- check$table
   columns <- intersect(c("parameter", "rhat", "ess", "ess_tail"), names(table))
-  worst <- table[order(-table$rhat), columns][1:min(5, nrow(table)), ]
-  result <- list(share = mean(ok), worst = worst)
-  ess_note <- if (rank) " (bulk and tail)" else ""
-  rhat_note <- if (rank) " (rank-normalized)" else ""
-  cat(sprintf("%.1f%% of %d parameters with ESS%s > %d and R-hat%s < %.2f\n", 100 * result$share, nrow(table),
-              ess_note, ess, rhat_note, rhat))
-  print_table(result$worst)
-  invisible(result)
+  order_by <- if (check$n_chain > 1) order(-table$rhat, table$ess) else order(table$ess)
+  worst <- table[order_by, columns][seq_len(min(5, nrow(table))), ]
+  result <- list(share = check$share, worst = worst, n = check$n, n_chain = check$n_chain, ess = check$ess,
+                 rhat = check$rhat, rank = check$rank)
+  structure(result, class = "rtirt_convergence")
+}
+
+#' @rdname convergence
+#' @export
+convergence.rtirt_qset <- function(object, ...) {
+  if (!qset_sampled(object)) {
+    stop("run gibbs() first", call. = FALSE)
+  }
+  levels <- lapply(object$models, convergence, ...)
+  structure(list(levels = levels, quantile = object$quantile), class = "rtirt_convergence")
+}
+
+#' @rdname convergence
+#' @export
+print.rtirt_convergence <- function(x, ...) {
+  if (!is.null(x$levels)) {                                            # several quantile levels
+    for (k in seq_along(x$levels)) {
+      cat(sprintf("q = %s: ", format(x$quantile[k])))
+      print(x$levels[[k]])
+      if (k < length(x$levels)) cat("\n")
+    }
+    return(invisible(x))
+  }
+  if (!is.null(x$converged)) {
+    status <- if (x$converged) "converged" else "NOT converged"
+    cat(sprintf("ECM: %s in %d iterations (relative change of the objective below tol)\n", status, x$iterations))
+    return(invisible(x))
+  }
+  ess_note <- if (x$rank) " (bulk and tail)" else ""
+  rhat_note <- if (x$rank) " (rank-normalized)" else ""
+  cat(sprintf("%.1f%% of %d parameters with ESS%s > %d and R-hat%s < %.2f\n", 100 * x$share, x$n,
+              ess_note, x$ess, rhat_note, x$rhat))
+  if (x$n_chain < 2) {
+    cat("  1 chain: R-hat cannot be computed (it needs n_chain >= 2), so only the ESS is checked\n")
+  }
+  print_table(x$worst)
+  invisible(x)
 }
 
 #' Compare estimates with true values
@@ -621,14 +695,16 @@ plot_traces <- function(x, selected, ...) {
 
 #' Several quantile levels
 #'
-#' `rtirt_cross(data, quantile = c(.1, .5, .9))` (or `rtirt_latent`) builds one ALD model per
-#' level, an `rtirt_qset`; [gibbs()] samples all of them. `coef()` gives a parameters x
+#' `fits <- gibbs(data, model = "cross", quantile = c(.1, .5, .9))` (or `model = "latent"`)
+#' samples one ALD model per level and returns them as an `rtirt_qset`. `coef()` gives a parameters x
 #' levels matrix, `estimates()` stacks the tables with a column `q`, and `plot()` draws the
 #' quantile coefficients (cross-relations `rho`, or the regression coefficients of
-#' `rtirt_latent`) against the level with 95% intervals.
+#' `"latent"`) against the level with 95% intervals. [convergence()] checks every level.
+#' The fit of one level is `fits$models[[k]]` (an ordinary fit: `summary()`, `estimates()`,
+#' `plot(type = "trace")`).
 #' @param x,object An `rtirt_qset`.
 #' @param pars Regular expression of the parameters to plot (default: `rho` for
-#'   `rtirt_cross`, `beta` and `b_ability` for `rtirt_latent`).
+#'   `"cross"`, `beta` and `b_ability` for `"latent"`).
 #' @param ... Unused, or passed to [graphics::plot()].
 #' @name rtirt_qset
 NULL
@@ -649,8 +725,8 @@ print.rtirt_qset <- function(x, ...) {
   key_pattern <- if (x$type == "rtirt_cross") "^rho\\[" else "^(beta|b_ability)"
   key <- grepl(key_pattern, rownames(coefs))
   print_table(data.frame(parameter = rownames(coefs)[key], coefs[key, , drop = FALSE], check.names = FALSE))
-  for (m in x$models) {
-    rh_warn(m)
+  for (k in seq_along(x$models)) {
+    convergence_warn(x$models[[k]], sprintf("q = %s", format(x$quantile[k])))
   }
   invisible(x)
 }

@@ -25,7 +25,7 @@ test_that("rank-normalized diagnostics (Vehtari et al., 2021) are available as a
   # with very short chains the rank-normalized R-hat is the stricter one (it sees the skewed variances)
   s <- gibbs(m, n_iter = 600, n_chain = 2, seed = 1, verbose = FALSE, fit_indices = FALSE)
   expect_gt(max(estimates(s, diagnostics = "rank")$rhat), max(estimates(s)$rhat))
-  expect_output(convergence(g, diagnostics = "rank"), "bulk and tail")
+  expect_output(print(convergence(g, diagnostics = "rank")), "bulk and tail")
 })
 
 test_that("person_fit() and ci_test() work and behave under the model", {

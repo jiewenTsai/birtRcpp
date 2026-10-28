@@ -158,3 +158,31 @@ test_that("gibbs() refuses quantile = for models without a quantile version, as 
                control = gibbs_control(verbose = FALSE, fit_indices = FALSE))
   expect_true(fit$qr)
 })
+
+test_that("print() of a Gibbs fit warns with the criteria of convergence(); convergence() prints once and covers quantile fits", {
+  dat <- small_data()
+  quiet <- gibbs_control(verbose = FALSE, fit_indices = FALSE)
+  one_chain <- gibbs(dat, model = "null", n_iter = 60, n_chain = 1, seed = 1, control = quiet)
+  printed <- paste(capture.output(print(one_chain)), collapse = "\n")
+  expect_match(printed, "1 chain, so R-hat cannot be computed (it needs n_chain >= 2)", fixed = TRUE)
+  expect_match(printed, "parameters have ESS > 400 and R-hat < 1.05", fixed = TRUE)
+  expect_output(print(convergence(one_chain)), "only the ESS is checked")
+
+  two_chains <- gibbs(dat, model = "null", n_iter = 60, n_chain = 2, seed = 1, control = quiet)
+  expect_silent(check <- convergence(two_chains))                   # assigned: not printed
+  expect_s3_class(check, "rtirt_convergence")
+  expect_lt(check$share, 1)
+  printed <- paste(capture.output(print(two_chains)), collapse = "\n")
+  expect_match(printed, sprintf("only %.1f%% of %d parameters have ESS > 400", 100 * check$share, check$n), fixed = TRUE)
+  expect_false(grepl("1 chain", printed))
+  shown <- capture.output(print(check))
+  expect_equal(sum(grepl("parameters with ESS", shown)), 1)
+  expect_false(any(grepl("^\\$share", shown)))                     # no second print of the raw list
+
+  levels <- gibbs(dat, model = "cross", quantile = c(0.25, 0.75), n_iter = 60, n_chain = 2, seed = 1, control = quiet)
+  check_q <- convergence(levels)
+  expect_length(check_q$levels, 2)
+  expect_equal(check_q$levels[[1]]$share, convergence(levels$models[[1]])$share)
+  expect_output(print(check_q), "q = 0.75: ")
+  expect_match(paste(capture.output(print(levels)), collapse = "\n"), "Warning (q = 0.25): only", fixed = TRUE)
+})

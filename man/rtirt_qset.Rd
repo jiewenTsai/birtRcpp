@@ -25,12 +25,14 @@
 \item{...}{Unused, or passed to \code{\link[graphics:plot.default]{graphics::plot()}}.}
 
 \item{pars}{Regular expression of the parameters to plot (default: \code{rho} for
-\code{rtirt_cross}, \code{beta} and \code{b_ability} for \code{rtirt_latent}).}
+\code{"cross"}, \code{beta} and \code{b_ability} for \code{"latent"}).}
 }
 \description{
-\code{rtirt_cross(data, quantile = c(.1, .5, .9))} (or \code{rtirt_latent}) builds one ALD model per
-level, an \code{rtirt_qset}; \code{\link[=gibbs]{gibbs()}} samples all of them. \code{coef()} gives a parameters x
+\code{fits <- gibbs(data, model = "cross", quantile = c(.1, .5, .9))} (or \code{model = "latent"})
+samples one ALD model per level and returns them as an \code{rtirt_qset}. \code{coef()} gives a parameters x
 levels matrix, \code{estimates()} stacks the tables with a column \code{q}, and \code{plot()} draws the
 quantile coefficients (cross-relations \code{rho}, or the regression coefficients of
-\code{rtirt_latent}) against the level with 95\% intervals.
+\code{"latent"}) against the level with 95\% intervals. \code{\link[=convergence]{convergence()}} checks every level.
+The fit of one level is \code{fits$models[[k]]} (an ordinary fit: \code{summary()}, \code{estimates()},
+\code{plot(type = "trace")}).
 }

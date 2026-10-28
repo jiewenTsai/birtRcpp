@@ -3,6 +3,8 @@
 \name{convergence}
 \alias{convergence}
 \alias{convergence.rtirt}
+\alias{convergence.rtirt_qset}
+\alias{print.rtirt_convergence}
 \title{Convergence check}
 \usage{
 convergence(object, ...)
@@ -14,20 +16,50 @@ convergence(object, ...)
   diagnostics = c("classic", "rank"),
   ...
 )
+
+\method{convergence}{rtirt_qset}(object, ...)
+
+\method{print}{rtirt_convergence}(x, ...)
 }
 \arguments{
-\item{object}{A sampled model.}
+\item{object}{A sampled model, an \code{rtirt_qset}, or an \code{\link[=ecm]{ecm()}} fit (whether ECM converged).}
 
 \item{...}{Unused.}
 
 \item{ess, rhat}{Thresholds (\code{rhat} defaults to 1.05, or 1.01 with \code{diagnostics = "rank"}).}
 
 \item{diagnostics}{\code{"classic"} or \code{"rank"}, as in \code{\link[=estimates]{estimates()}}.}
+
+\item{x}{An \code{rtirt_convergence} object.}
+}
+\value{
+An object of class \code{rtirt_convergence}, printed by its \code{print()} method: \code{share}
+(share of parameters that pass), \code{worst} (the five parameters with the largest R-hat, or
+the smallest ESS with one chain), \code{n} (parameters checked), \code{n_chain} and the thresholds;
+for an ECM fit \code{converged} and \code{iterations}; for an \code{rtirt_qset} one such object per level
+(\code{levels}) with \code{quantile}.
 }
 \description{
 The share of item and structural parameters with effective sample size above \code{ess} and
 R-hat below \code{rhat} (over independent chains), and the worst parameters. With
 \code{diagnostics = "rank"} (see \code{\link[=estimates]{estimates()}}) both the bulk and the tail ESS must exceed \code{ess},
 and the default R-hat threshold is 1.01 (Vehtari et al., 2021) instead of 1.05.
+Parameters that do not vary (fixed ones) are left out. With one chain R-hat cannot be
+computed and only the ESS is checked. \code{print()} of a \code{\link[=gibbs]{gibbs()}} fit warns with the same
+criteria (default thresholds) when a parameter fails them.
 Julia: \code{checkConvergence()}.
+}
+\details{
+For several quantile levels (an \code{rtirt_qset} from \code{gibbs(..., quantile = c(.25, .75))})
+each level is checked; the model of one level is \code{fits$models[[k]]}.
+}
+\examples{
+\donttest{
+cond <- set_cond(n_subj = 200, n_item = 6)
+dat <- sim_data(cond, sim_para(cond, "null"), "null")
+fit <- gibbs(dat, model = "null", n_iter = 1000, n_chain = 2, seed = 1)
+check <- convergence(fit)   # printed only when not assigned
+check
+check$share
+}
 }

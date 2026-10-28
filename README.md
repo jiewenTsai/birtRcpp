@@ -102,9 +102,13 @@ rtirt_cross
   500 persons x 10 items
   3 chains x 2000 iterations (burn-in 1000, thin 1); 9.9 s
   Reliability: ability 0.738, speed 0.970
-  Marginal: DIC 16720.6 (pD 51.1), WAIC 16721.3
+  Marginal: DIC 16720.6 (pD 51.1), WAIC 16721.3, LOOIC 16722.1
+  Warning: only 98.0% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.02, min ESS 318); run longer (n_iter) or see convergence()
 Use summary(), coef(), scores(), estimates(), convergence(), fit_indices(), plot().
 ```
+
+`print()` warns when a parameter fails the criteria of `convergence()` (ESS > 400 and R-hat < 1.05),
+or when one chain gives no R-hat; this short run is for illustration, use `n_iter = 10000` or more.
 
 ```r
 estimates(g, pars = "^rho")[1:3, ]     # posterior mean, SD, 95% interval, R-hat, ESS

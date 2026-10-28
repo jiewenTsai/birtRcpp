@@ -75,7 +75,7 @@ test_that("accessors: coef, summary, scores, reliability, fit_indices, plot", {
   s <- summary(m); expect_output(print(s), "[$]items"); expect_equal(nrow(s$items), ncol(m$data$Y))
   expect_true(all(nzchar(as.data.frame(s)$prior[!as.data.frame(s)$fixed])))
   expect_output(print(m), "Reliability")
-  expect_output(cv <- convergence(m), "parameters with ESS")
+  expect_silent(cv <- convergence(m)); expect_output(print(cv), "parameters with ESS")
   expect_true(cv$share >= 0 && cv$share <= 1)                       # was NaN without tail ESS
   pdf(NULL); on.exit(grDevices::dev.off())
   expect_silent(plot(m)); expect_silent(plot(m, "trace"))
