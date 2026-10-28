@@ -82,6 +82,7 @@ step <- function(s, d) {
   s$.loglik <- e$loglik
   s
 }
+loglik <- function(s, d) estep_irt(d$Y, s$a, s$b)$loglik
 check_ecm(data = list(Y = Y), init = list(a = rep(1, 5), b = rep(0, 5)), step = step,
-          loglik = function(s, d) estep_irt(d$Y, s$a, s$b)$loglik, positive = "a", n_start = 3, seed = 1)
+          loglik = loglik, positive = "a", n_start = 3, seed = 1)
 }

@@ -888,8 +888,9 @@ print.block_model_ecm <- function(x, ...) {
 #'   s$.loglik <- e$loglik
 #'   s
 #' }
+#' loglik <- function(s, d) estep_irt(d$Y, s$a, s$b)$loglik
 #' check_ecm(data = list(Y = Y), init = list(a = rep(1, 5), b = rep(0, 5)), step = step,
-#'           loglik = function(s, d) estep_irt(d$Y, s$a, s$b)$loglik, positive = "a", n_start = 3, seed = 1)
+#'           loglik = loglik, positive = "a", n_start = 3, seed = 1)
 #' @export
 check_ecm <- function(model = NULL, steps = NULL, latent = NULL, nodes = NULL, prior = c("map", "ml"), n_start = 10,
                      data = NULL, init = NULL, step = NULL, loglik = NULL, positive = character(), seed = NULL, quadrature = c("adaptive", "ba81")) {
