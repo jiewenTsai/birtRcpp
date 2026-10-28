@@ -4,21 +4,21 @@ Title: BIvariate Response Time Modeling with 'Rcpp'
 Version: 0.1.0
 Authors@R: person("Jie-Wen", "Tsai", role = c("aut", "cre"), email = "tsai.jiewen@gmail.com")
 Description: Item response and response time models fitted from their full conditionals.
-    Models are declared with block_model(). The main estimator is ECM (ecm(); Meng and Rubin,
-    1993, <doi:10.1093/biomet/80.2.267>): one conditional maximization per block of parameters,
+    A built-in model is chosen with ecm(data, model = ...) or gibbs(data, model = ...): the
+    two-parameter logistic model, alone or with log-normal response times (van der Linden,
+    2007, <doi:10.1007/s11336-006-1478-z>), latent regressions of ability and speed,
+    cross-relations between ability and the log response times, and their quantile
+    (asymmetric Laplace) versions. The main estimator is ECM (ecm(); Meng and Rubin, 1993,
+    <doi:10.1093/biomet/80.2.267>): one conditional maximization per block of parameters,
     Polya-Gamma bounds for logistic likelihoods (Polson, Scott and Windle, 2013,
     <doi:10.1080/01621459.2013.829001>), adaptive or Bock-Aitkin quadrature (Bock and Aitkin,
     1981, <doi:10.1007/BF02293801>) with normal-linear latent variables integrated exactly, and
     Louis' standard errors. The same steps drive Gibbs sampling (gibbs(); conjugate updates and
-    Metropolis-adjusted Langevin steps) and coordinate-ascent variational inference (vi());
-    mml() maximizes the same objective directly by Newton steps. Each engine has a check
-    (Geweke, 2004, <doi:10.1198/016214504000001132>, and simulation-based calibration for the
-    samplers) and algorithm() writes out every step. Built-in models: the two-parameter logistic
-    model with log-normal response times (van der Linden, 2007, <doi:10.1007/s11336-006-1478-z>),
-    latent regressions of ability and speed, cross-relations between ability and the log
-    response times, and their quantile (asymmetric Laplace) versions, with samplers in C++
-    ('RcppArmadillo') that port the 'Julia' package 'ExtendedRtIrtModeling.jl' (its function
-    names are kept as aliases).
+    Metropolis-adjusted Langevin steps), with samplers in C++ ('RcppArmadillo') that port the
+    'Julia' package 'ExtendedRtIrtModeling.jl' (its function names are kept as aliases). Both
+    estimators have a check: check_ecm(), and check_sampler() with the Geweke (2004,
+    <doi:10.1198/016214504000001132>) test and simulation-based calibration. equations() and
+    algorithm() write out the model and every step, before or after fitting.
 License: GPL-3
 URL: https://github.com/jiewenTsai/birtRcpp, https://github.com/jiewenTsai/birtExamples
 BugReports: https://github.com/jiewenTsai/birtRcpp/issues
