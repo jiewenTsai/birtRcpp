@@ -227,17 +227,20 @@ qs
 ```
 model = "cross" (rtirt_cross) at quantiles 0.1, 0.5, 0.9
 parameter   q=0.1   q=0.5   q=0.9
-rho[q1]    -0.168  -0.082  -0.203
-rho[q2]     0.113   0.093   0.122
-rho[q3]     0.211   0.186   0.284
-rho[q4]    -0.045   0.043   0.092
-rho[q5]     0.345   0.350   0.441
+rho[q1]    -0.179  -0.085  -0.206
+rho[q2]     0.100   0.092   0.140
+rho[q3]     0.209   0.193   0.287
+rho[q4]    -0.051   0.044   0.099
+rho[q5]     0.352   0.348   0.442
 ...
-  Warning: max R-hat 1.10 > 1.05; see convergence()
+  Warning (q = 0.1): only 39.2% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.12, min ESS 54); run longer (n_iter) or see convergence()
+  Warning (q = 0.5): only 88.2% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.06, min ESS 253); run longer (n_iter) or see convergence()
+  Warning (q = 0.9): only 41.2% of 51 parameters have ESS > 400 and R-hat < 1.05 (max R-hat 1.03, min ESS 110); run longer (n_iter) or see convergence()
 ```
 
 The chains here are short for the sake of the example (the defaults are `n_iter = 5000`,
-`n_chain = 4`); the print warns when R-hat is above 1.05.
+`n_chain = 4`); the print warns for each quantile level where some parameter has ESS <= 400
+or R-hat >= 1.05 (`convergence(qs)` lists them).
 
 ```r
 plot(qs)              # rho of each item against the quantile level, with 95% intervals
