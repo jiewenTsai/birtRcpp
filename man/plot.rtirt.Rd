@@ -4,20 +4,25 @@
 \alias{plot.rtirt}
 \title{Plots of a sampled model}
 \usage{
-\method{plot}{rtirt}(x, type = c("items", "trace"), pars = NULL, ...)
+\method{plot}{rtirt}(x, type = c("items", "structural", "trace"), pars = NULL, ...)
 }
 \arguments{
 \item{x}{A sampled model.}
 
-\item{type}{\code{"items"} or \code{"trace"}.}
+\item{type}{\code{"items"}, \code{"structural"} or \code{"trace"}.}
 
-\item{pars}{Regular expression selecting parameters (\code{"trace"}; at most 12 are drawn).}
+\item{pars}{Regular expression selecting parameters (\code{"structural"} and \code{"trace"}; at most 12
+are drawn in \code{"trace"}).}
 
 \item{...}{Passed to \code{\link[graphics:plot.default]{graphics::plot()}}.}
 }
 \description{
 \code{type = "items"}: posterior means and 95\% intervals of the item parameters (ECM fits: estimates
 and Wald 95\% intervals), one panel
-per parameter type (a, b, lambda, sigma2t, rho). \code{type = "trace"}: trace plots (all
+per parameter type (a, b, lambda, sigma2t, rho). \code{type = "structural"}: the same for the
+structural parameters (regression coefficients, \code{cor_ability_speed}, \code{b_ability},
+\code{var_speed}), or those matching \code{pars}. \code{type = "trace"}: trace plots (all
 iterations; burn-in shaded) of the structural parameters or of those matching \code{pars}.
+For plots of your own (e.g. with ggplot2), \code{estimates(fit)} (or \code{as.data.frame(fit)}) has
+the estimates and intervals as a data frame.
 }

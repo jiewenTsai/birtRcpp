@@ -32,7 +32,7 @@ plain_table <- function(x) {
 #' returns `parameters`. `print()` shows the tables under their names, so `s$items` gets the
 #' one printed as `$items`.
 #' @param x An `rtirt_summary`, or one of its tables.
-#' @param tables Names of the tables to print (default all).
+#' @param tables Names of the tables to print (default all); an unknown name is an error.
 #' @param digits Decimals.
 #' @param title Print the title of a table.
 #' @param row.names,optional Unused.
@@ -44,11 +44,12 @@ NULL
 #' @rdname rtirt_summary
 #' @export
 print.rtirt_summary <- function(x, tables = NULL, digits = 3, ...) {
-  cat(x$header, sep = "\n")
   table_names <- setdiff(names(x), "header")
   if (!is.null(tables)) {
+    check_table_names(tables, table_names)
     table_names <- intersect(tables, table_names)
   }
+  cat(x$header, sep = "\n")
   for (name in table_names) {
     table <- x[[name]]
     if (is.null(table) || (is.data.frame(table) && !nrow(table))) {
@@ -60,6 +61,20 @@ print.rtirt_summary <- function(x, tables = NULL, digits = 3, ...) {
     print(table, digits = digits, title = FALSE)
   }
   invisible(x)
+}
+
+# print(s, tables = "item"): an error with the closest table name
+check_table_names <- function(tables, table_names) {
+  unknown <- setdiff(tables, table_names)
+  if (!length(unknown)) {
+    return(invisible())
+  }
+  guesses <- vapply(unknown, function(name) {
+    guess <- closest_name(name, table_names)
+    if (is.null(guess)) "" else sprintf(" (did you mean \"%s\"?)", guess)
+  }, "")
+  stop(sprintf("unknown table %s; the tables are %s", paste0("\"", unknown, "\"", guesses, collapse = ", "),
+               paste0("\"", table_names, "\"", collapse = ", ")), call. = FALSE)
 }
 
 #' @rdname rtirt_summary

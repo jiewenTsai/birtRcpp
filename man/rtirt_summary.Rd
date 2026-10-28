@@ -16,7 +16,7 @@
 \arguments{
 \item{x}{An \code{rtirt_summary}, or one of its tables.}
 
-\item{tables}{Names of the tables to print (default all).}
+\item{tables}{Names of the tables to print (default all); an unknown name is an error.}
 
 \item{digits}{Decimals.}
 

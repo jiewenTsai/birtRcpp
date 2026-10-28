@@ -6,6 +6,7 @@
 \alias{coef.rtirt_qset}
 \alias{estimates.rtirt_qset}
 \alias{summary.rtirt_qset}
+\alias{print.summary.rtirt_qset}
 \alias{plot.rtirt_qset}
 \title{Several quantile levels}
 \usage{
@@ -16,6 +17,8 @@
 \method{estimates}{rtirt_qset}(object, ...)
 
 \method{summary}{rtirt_qset}(object, ...)
+
+\method{print}{summary.rtirt_qset}(x, ...)
 
 \method{plot}{rtirt_qset}(x, pars = NULL, ...)
 }
@@ -33,6 +36,7 @@ samples one ALD model per level and returns them as an \code{rtirt_qset}. \code{
 levels matrix, \code{estimates()} stacks the tables with a column \code{q}, and \code{plot()} draws the
 quantile coefficients (cross-relations \code{rho}, or the regression coefficients of
 \code{"latent"}) against the level with 95\% intervals. \code{\link[=convergence]{convergence()}} checks every level.
+\code{summary()} returns an object that prints as \code{print()}.
 The fit of one level is \code{fits$models[[k]]} (an ordinary fit: \code{summary()}, \code{estimates()},
 \code{plot(type = "trace")}).
 }

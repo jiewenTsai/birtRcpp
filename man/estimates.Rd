@@ -5,6 +5,8 @@
 \alias{estimates.rtirt}
 \alias{precis}
 \alias{precis.rtirt}
+\alias{print.rtirt_precis}
+\alias{as.data.frame.rtirt}
 \alias{coef.rtirt}
 \title{Parameter estimates}
 \usage{
@@ -21,6 +23,10 @@ estimates(object, ...)
 precis(object, ...)
 
 \method{precis}{rtirt}(object, pars = NULL, digits = 3, ...)
+
+\method{print}{rtirt_precis}(x, digits = attr(x, "digits"), ...)
+
+\method{as.data.frame}{rtirt}(x, row.names = NULL, optional = FALSE, ...)
 
 \method{coef}{rtirt}(object, ...)
 }
@@ -41,6 +47,10 @@ chains with different variances or poorly mixing tails; the table then has \code
 \code{ess_tail}.}
 
 \item{digits}{Decimals to print.}
+
+\item{x}{The result of \code{precis()}.}
+
+\item{row.names, optional}{Unused.}
 }
 \description{
 \code{estimates()} returns the posterior summary of the item and structural parameters as a
@@ -50,7 +60,8 @@ is given only for parameters where 0 is a meaningful value: difficulties \code{b
 coefficients \code{beta}, cross-relations \code{rho}, \code{cor_ability_speed} and \code{b_ability}. It is \code{NA}
 for discriminations, variances (\code{sigma2t}, \code{var_speed}), which are positive and whose
 intervals never contain 0, and time intensities \code{lambda}.
-\code{precis()} (the Julia name) prints the same table. \code{coef()} returns the posterior means
+\code{precis()} (the Julia name) returns the same table, printed in a plain layout (assigning it
+prints nothing); \code{as.data.frame()} gives it as a plain data frame, e.g. for ggplot2. \code{coef()} returns the posterior means
 as a named vector. For a model fitted by \code{\link[=ecm]{ecm()}} the table has the maximum likelihood
 estimates with standard errors (\code{est}, \code{se}, \code{z}, Wald 95\% interval \code{q025}, \code{q975}); \code{z},
 like \code{sig}, is \code{NA} where 0 is not a meaningful value, and \code{summary()} then shows no z or p.

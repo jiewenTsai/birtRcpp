@@ -57,6 +57,10 @@ convergence_warn <- function(x, level = "") {
 
 need_post <- function(x) {
   if (is.null(x$post)) {
+    if (has_em(x)) {
+      stop(sprintf("this is an ecm() fit: it has no chains or draws; sample with gibbs(data, %s, init = fit)",
+                   model_call_text(class(x)[1])), call. = FALSE)
+    }
     stop("run gibbs() first", call. = FALSE)
   }
 }
@@ -80,7 +84,8 @@ post_mcmc <- function(x) {
 #' coefficients `beta`, cross-relations `rho`, `cor_ability_speed` and `b_ability`. It is `NA`
 #' for discriminations, variances (`sigma2t`, `var_speed`), which are positive and whose
 #' intervals never contain 0, and time intensities `lambda`.
-#' `precis()` (the Julia name) prints the same table. `coef()` returns the posterior means
+#' `precis()` (the Julia name) returns the same table, printed in a plain layout (assigning it
+#' prints nothing); `as.data.frame()` gives it as a plain data frame, e.g. for ggplot2. `coef()` returns the posterior means
 #' as a named vector. For a model fitted by [ecm()] the table has the maximum likelihood
 #' estimates with standard errors (`est`, `se`, `z`, Wald 95% interval `q025`, `q975`); `z`,
 #' like `sig`, is `NA` where 0 is not a meaningful value, and `summary()` then shows no z or p.
@@ -121,6 +126,7 @@ estimates_rtirt <- function(object, pars, method, diagnostics) {
     need_em(object)
     table <- object$ecm$estimates
     if (!is.null(pars)) {
+      warn_no_match(pars, table$parameter)
       table <- table[grepl(pars, table$parameter), , drop = FALSE]
     }
     return(table)
@@ -133,7 +139,11 @@ estimates_rtirt <- function(object, pars, method, diagnostics) {
   chains <- post_mcmc(object)
   draws <- as.matrix(chains)
   if (!is.null(pars)) {
+    warn_no_match(pars, colnames(draws))
     keep <- grepl(pars, colnames(draws))
+    if (!any(keep)) {
+      return(estimates_rtirt(object, NULL, method, diagnostics)[0, , drop = FALSE])
+    }
     draws <- draws[, keep, drop = FALSE]
     chains <- chains[, keep, drop = FALSE]
   }
@@ -154,6 +164,15 @@ estimates_rtirt <- function(object, pars, method, diagnostics) {
   }
   table$sig <- sig_flag(table$parameter, interval[1, ], interval[2, ])
   table
+}
+
+# estimates(pars = ) that selects nothing: say so and list the parameter names
+warn_no_match <- function(pars, parameters) {
+  if (any(grepl(pars, parameters))) {
+    return(invisible())
+  }
+  blocks <- unique(sub("\\[.*", "", parameters))
+  warning(sprintf("no parameters match \"%s\"; this fit has %s", pars, paste(blocks, collapse = ", ")), call. = FALSE)
 }
 
 # `sig` of estimates(): "*" when the 95% interval excludes 0, for the parameters where 0 is a
@@ -206,8 +225,25 @@ precis <- function(object, ...) {
 #' @export
 precis.rtirt <- function(object, pars = NULL, digits = 3, ...) {
   tab <- estimates(object, pars)
-  print_table(tab, digits)
-  invisible(tab)
+  structure(tab, class = c("rtirt_precis", class(tab)), digits = digits)
+}
+
+#' @rdname estimates
+#' @param x The result of `precis()`.
+#' @export
+print.rtirt_precis <- function(x, digits = attr(x, "digits"), ...) {
+  table <- x
+  attr(table, "digits") <- NULL
+  class(table) <- "data.frame"
+  print_table(table, digits %||% 3)
+  invisible(x)
+}
+
+#' @rdname estimates
+#' @param row.names,optional Unused.
+#' @export
+as.data.frame.rtirt <- function(x, row.names = NULL, optional = FALSE, ...) {
+  as.data.frame(estimates(x))
 }
 
 #' @rdname estimates
@@ -297,7 +333,8 @@ gibbs_fit_table <- function(object, table) {
 
 gibbs_fit_title <- function(object) {
   ald_note <- if (isTRUE(object$qr)) "; ALD working likelihood: not comparable with mean models or across quantile levels" else ""
-  paste0("marginal likelihood (persons integrated out); DIC_complete conditions on the persons", ald_note)
+  paste0("marginal likelihood (persons integrated out): compare models by WAIC or LOOIC (smaller is better); ",
+         "DIC_complete conditions on the persons (as the Julia package)", ald_note)
 }
 
 person_cov_table <- function(person_cov, title) {
@@ -646,14 +683,19 @@ as.mcmc.list.rtirt <- function(x, ...) {
 #'
 #' `type = "items"`: posterior means and 95% intervals of the item parameters (ECM fits: estimates
 #' and Wald 95% intervals), one panel
-#' per parameter type (a, b, lambda, sigma2t, rho). `type = "trace"`: trace plots (all
+#' per parameter type (a, b, lambda, sigma2t, rho). `type = "structural"`: the same for the
+#' structural parameters (regression coefficients, `cor_ability_speed`, `b_ability`,
+#' `var_speed`), or those matching `pars`. `type = "trace"`: trace plots (all
 #' iterations; burn-in shaded) of the structural parameters or of those matching `pars`.
+#' For plots of your own (e.g. with ggplot2), `estimates(fit)` (or `as.data.frame(fit)`) has
+#' the estimates and intervals as a data frame.
 #' @param x A sampled model.
-#' @param type `"items"` or `"trace"`.
-#' @param pars Regular expression selecting parameters (`"trace"`; at most 12 are drawn).
+#' @param type `"items"`, `"structural"` or `"trace"`.
+#' @param pars Regular expression selecting parameters (`"structural"` and `"trace"`; at most 12
+#'   are drawn in `"trace"`).
 #' @param ... Passed to [graphics::plot()].
 #' @export
-plot.rtirt <- function(x, type = c("items", "trace"), pars = NULL, ...) {
+plot.rtirt <- function(x, type = c("items", "structural", "trace"), pars = NULL, ...) {
   type <- match.arg(type)
   if (type == "trace" || !has_em(x)) {                 # items: posterior or Wald 95% intervals (ECM)
     need_post(x)
@@ -662,6 +704,15 @@ plot.rtirt <- function(x, type = c("items", "trace"), pars = NULL, ...) {
   if (type == "items") {
     plot_items(x, table, ...)
     return(invisible(table))
+  }
+  if (type == "structural") {
+    pars <- pars %||% "^(beta|b_ability|cor_ability_speed|var_speed)"
+    rows <- table[grepl(pars, table$parameter), ]
+    if (!nrow(rows)) {
+      stop("no parameters match '", pars, "'", call. = FALSE)
+    }
+    plot_intervals(rows, ...)
+    return(invisible(rows))
   }
   pars <- pars %||% "^(rho|beta|b_ability|cor_ability_speed|var_speed)"
   selected <- table$parameter[grepl(pars, table$parameter)]
@@ -698,15 +749,29 @@ plot_items <- function(x, table, ...) {
   }
 }
 
+# estimates and 95% intervals of a few parameters, one row each, 0 marked
+plot_intervals <- function(rows, ...) {
+  n_par <- nrow(rows)
+  positions <- n_par:1
+  old_par <- graphics::par(mar = c(4, max(4, 0.5 * max(nchar(rows$parameter))), 2.5, 1))
+  on.exit(graphics::par(old_par))
+  graphics::plot(rows$est, positions, xlim = range(rows$q025, rows$q975, 0), ylim = c(0.5, n_par + 0.5), yaxt = "n",
+                 pch = 19, xlab = "estimate and 95% interval", ylab = "", main = "structural parameters", ...)
+  graphics::segments(rows$q025, positions, rows$q975, positions)
+  graphics::abline(v = 0, lty = 3)
+  graphics::axis(2, positions, rows$parameter, las = 1, cex.axis = 0.8)
+}
+
 # trace plots of the chains, burn-in shaded
 plot_traces <- function(x, selected, ...) {
   n_col <- ceiling(sqrt(length(selected)))
-  old_par <- graphics::par(mfrow = c(ceiling(length(selected) / n_col), n_col), mar = c(3, 3, 2, 1))
+  old_par <- graphics::par(mfrow = c(ceiling(length(selected) / n_col), n_col), mar = c(4, 3, 2, 1))
   on.exit(graphics::par(old_par))
   for (p in selected) {
     chains <- sapply(x$post$draws, function(m) m[, p])
     iterations <- seq_len(nrow(chains)) * x$cond$n_thin
-    graphics::matplot(iterations, chains, type = "l", lty = 1, col = seq_len(ncol(chains)), xlab = "", ylab = "", main = p, ...)
+    graphics::matplot(iterations, chains, type = "l", lty = 1, col = seq_len(ncol(chains)), xlab = "iteration", ylab = "",
+                      main = p, ...)
     usr <- graphics::par("usr")
     graphics::rect(0, usr[3], x$post$burnin, usr[4], col = grDevices::adjustcolor("grey", 0.3), border = NA)
   }
@@ -721,6 +786,7 @@ plot_traces <- function(x, selected, ...) {
 #' levels matrix, `estimates()` stacks the tables with a column `q`, and `plot()` draws the
 #' quantile coefficients (cross-relations `rho`, or the regression coefficients of
 #' `"latent"`) against the level with 95% intervals. [convergence()] checks every level.
+#' `summary()` returns an object that prints as `print()`.
 #' The fit of one level is `fits$models[[k]]` (an ordinary fit: `summary()`, `estimates()`,
 #' `plot(type = "trace")`).
 #' @param x,object An `rtirt_qset`.
@@ -771,8 +837,14 @@ estimates.rtirt_qset <- function(object, ...) {
 #' @rdname rtirt_qset
 #' @export
 summary.rtirt_qset <- function(object, ...) {
-  print(object, ...)
-  invisible(object)
+  structure(list(fits = object), class = "summary.rtirt_qset")
+}
+
+#' @rdname rtirt_qset
+#' @export
+print.summary.rtirt_qset <- function(x, ...) {
+  print(x$fits, ...)
+  invisible(x)
 }
 
 #' @rdname rtirt_qset
