@@ -106,6 +106,12 @@ select_cov <- function(data, type, cov) {
     data$X <- NULL
     return(data)
   }
+  if (!is.null(cov) && !is.character(cov)) {
+    in_data <- colnames(data$X)
+    have <- if (length(in_data)) sprintf(" (here: %s)", paste(in_data, collapse = ", ")) else " (here: none)"
+    stop(sprintf("cov = takes the names of covariates already in the data%s, not their values; add a covariate with input_data(..., cov = ), e.g. input_data(resp = items, time = times, cov = \"age_c\", data = raw)",
+                 have), call. = FALSE)
+  }
   if (!is.null(cov)) {
     missing_cov <- setdiff(cov, colnames(data$X))
     if (length(missing_cov)) {

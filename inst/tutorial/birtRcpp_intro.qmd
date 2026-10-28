@@ -1175,7 +1175,8 @@ summary(fq)
 | 資料是一列一個「人 × 題」（長格式，例如 PsychoPy、E-Prime 匯出的） | `input_data()` 會報錯並提示怎麼轉成寬格式（一列一人、一欄一題），例如 `tidyr::pivot_wider(long, id_cols = id, names_from = item, values_from = c(correct, rt))` |
 | 共變項是類別（性別、組別） | 先做虛擬編碼再置中：k 個類別要 k − 1 個欄位，例如 `model.matrix(~ grade, raw)[, -1]`；兩類的可以寫 `raw$female <- as.numeric(raw$gender == "F")` |
 | 共變項要不要置中 | 要（第 3 節） |
-| 時間單位 | 秒數用 `time =`；已經取 log 用 `log_time =` |
+| 時間單位 | 秒數用 `time =`；已經取 log 用 `log_time =`。毫秒或分鐘也能估，單位只會讓每題的 λ 平移一個常數（毫秒比秒大 log 1000 ≈ 6.9，分鐘比秒小 log 60 ≈ 4.1），a、b、ρ、變異數和相關都不變；報告 λ 時寫明單位。`gibbs()` 的 λ 預設先驗是給秒的，所以中位數超過 1000 時 `input_data()` 會提醒「看起來是毫秒」，建議除以 1000 |
+| 作答是文字（"correct"／"wrong"）或 factor | `input_data()` 會列出找到的值，並提示怎麼改成 0/1，例如 `raw[items] <- lapply(raw[items], function(x) as.integer(x == "correct"))`；`TRUE`／`FALSE` 可以直接用 |
 | 分位數的結果怎麼報告 | 和平均數模型一起報告；極端分位數的 ρ 會偏大（第 8 節） |
 | 舊程式用 `rtirt_cross(dat)` 這類函數 | 還能用，但會警告。改成 `ecm(dat, model = "cross")`、`gibbs(dat, model = "cross")`；`gibbs(fit, init = "ecm")` 改成 `gibbs(dat, model = "cross", init = fit)`；`nodes`、`max_iter` 等改放進 `ecm_control()`，`n_burnin`、`collapse`、`verbose`、`fit_indices` 改放進 `gibbs_control()` |
 | 舊程式用 `em()`、`check_em()` | 改名了：`ecm()`、`check_ecm()`。`map = TRUE` 改成 `prior = "map"`，`Q =` 改成 `ecm_control(nodes = )`，`fit$em` 改成 `fit$ecm` |

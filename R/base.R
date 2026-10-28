@@ -95,6 +95,15 @@ item_names <- function(K) {
 #' first, e.g. `model.matrix(~ grade, data)[, -1]` (k - 1 columns for k categories), and
 #' centre them.
 #'
+#' Responses coded as text or factors (`"correct"` / `"wrong"`) must be recoded to 0/1 first;
+#' the message shows the values found and the recoding. `TRUE` / `FALSE` are accepted.
+#'
+#' **Units of time.** Seconds are expected, but the unit only shifts the time intensities:
+#' times in milliseconds give every `lambda` larger by log(1000) = 6.91 (minutes: smaller by
+#' log(60) = 4.09), and a, b, rho, the residual variances and the correlations do not change.
+#' Report the unit with `lambda`. The default prior of `lambda` in [gibbs()] (N(0, 10^2)) is
+#' meant for seconds, so a median time above 1000 gives a warning that suggests milliseconds.
+#'
 #' @param resp Binary (0/1) responses, persons x items.
 #' @param time Response times in seconds (positive), same dimensions as `resp`; they are
 #'   log-transformed. Give log times as `log_time` instead.
@@ -110,7 +119,7 @@ input_data <- function(resp, time = NULL, cov = NULL, data = NULL, id = NULL, lo
   if (!is.null(data) && !is.data.frame(data)) {
     stop("`data` must be a data frame")
   }
-  Y <- get_block(resp, data, "resp")
+  Y <- get_block(resp, data, "resp", resp_text_hint(resp, data))
   items <- colnames(Y) %||% item_names(ncol(Y))
   check_resp(Y, items)
 
@@ -125,12 +134,38 @@ input_data <- function(resp, time = NULL, cov = NULL, data = NULL, id = NULL, lo
   structure(container, class = "input_data")
 }
 
+# responses given as text or factors: the values found and how to recode them to 0/1
+resp_text_hint <- function(resp, data) {
+  block <- if (is.data.frame(resp)) {
+    resp
+  } else if (is.character(resp) && is.data.frame(data) && all(resp %in% names(data))) {
+    data[resp]
+  } else {
+    return("")
+  }
+  is_text <- !vapply(block, function(v) is.numeric(v) || is.logical(v), TRUE)
+  values <- unique(unlist(lapply(block[is_text], function(v) as.character(unique(v)))))
+  values <- values[!is.na(values)]
+  if (!length(values)) {
+    return("")
+  }
+  correct <- values[grepl("^(correct|right|true|yes|1|c)$", tolower(values))]
+  example <- if (length(correct)) correct[1] else values[1]
+  more <- if (length(values) > 4) ", ..." else ""
+  sprintf(" (values: %s%s); recode them to 0/1, e.g. data[resp] <- lapply(data[resp], function(x) as.integer(x == \"%s\"))",
+          paste0("\"", utils::head(values, 4), "\"", collapse = ", "), more, example)
+}
+
+# missing values of resp or time: how many, in how many persons, and how to drop them
+stop_missing <- function(what, M) {
+  stop(sprintf("%s has %d missing values in %d persons; birtRcpp needs complete data. Drop those persons first, e.g. data[stats::complete.cases(data[c(resp, time)]), ]",
+               what, sum(is.na(M)), sum(rowSums(is.na(M)) > 0)), call. = FALSE)
+}
+
 # responses: complete, coded 0/1, every item with both values
 check_resp <- function(Y, items) {
   if (anyNA(Y)) {
-    persons_missing <- sum(rowSums(is.na(Y)) > 0)
-    stop(sprintf("resp has %d missing values in %d persons; birtRcpp needs complete data. Drop those persons first, e.g. data[stats::complete.cases(data[c(resp, time)]), ]",
-                 sum(is.na(Y)), persons_missing), call. = FALSE)
+    stop_missing("resp", Y)
   }
   values <- sort(unique(c(Y)))
   if (!all(values %in% c(0, 1))) {
@@ -182,11 +217,15 @@ check_same_dim <- function(M, Y, what) {
 
 check_seconds <- function(T) {
   if (anyNA(T)) {
-    stop("time has missing values; drop those persons first", call. = FALSE)
+    stop_missing("time", T)
   }
   if (any(T <= 0)) {
     hint <- if (any(T < 0)) "; negative values suggest log times: use log_time =" else ""
     stop("time must be positive seconds", hint, call. = FALSE)
+  }
+  if (stats::median(T) > 1000) {
+    warning(sprintf("time has median %.0f: if these are milliseconds, divide them by 1000 (seconds). The unit shifts only the time intensities (lambda by log(1000) = 6.91), but the default prior of lambda is meant for seconds",
+                    stats::median(T)), call. = FALSE)
   }
   if (max(T) < 15 && stats::median(T) < 6) {
     warning(sprintf("time is in (%.2f, %.2f) with median %.2f: if these are already log times, pass them as log_time = (time is log-transformed)",
@@ -196,7 +235,7 @@ check_seconds <- function(T) {
 
 check_log_seconds <- function(log_t) {
   if (anyNA(log_t)) {
-    stop("log_time has missing values; drop those persons first", call. = FALSE)
+    stop_missing("log_time", log_t)
   }
   if (min(log_t) > 0 && stats::median(log_t) > 15) {
     warning(sprintf("log_time has median %.1f: these look like raw seconds; pass them as time =", stats::median(log_t)), call. = FALSE)
@@ -223,7 +262,8 @@ read_cov <- function(cov, data, n_person) {
     stop(sprintf("cov has %d rows; resp has %d persons", nrow(X), n_person), call. = FALSE)
   }
   if (anyNA(X)) {
-    stop("cov has missing values; drop those persons first", call. = FALSE)
+    stop(sprintf("cov has %d missing values in %d persons; birtRcpp needs complete data. Drop those persons first, e.g. data[stats::complete.cases(data[c(resp, time, cov)]), ]",
+                 sum(is.na(X)), sum(rowSums(is.na(X)) > 0)), call. = FALSE)
   }
   if (is.null(colnames(X))) {
     colnames(X) <- sprintf("x%d", seq_len(ncol(X)))

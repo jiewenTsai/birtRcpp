@@ -54,4 +54,13 @@ or \code{stats::reshape(long, idvar = "id", timevar = "item", direction = "wide"
 duplicated ids give a warning. Covariates must be numeric: dummy-code categorical ones
 first, e.g. \code{model.matrix(~ grade, data)[, -1]} (k - 1 columns for k categories), and
 centre them.
+
+Responses coded as text or factors (\code{"correct"} / \code{"wrong"}) must be recoded to 0/1 first;
+the message shows the values found and the recoding. \code{TRUE} / \code{FALSE} are accepted.
+
+\strong{Units of time.} Seconds are expected, but the unit only shifts the time intensities:
+times in milliseconds give every \code{lambda} larger by log(1000) = 6.91 (minutes: smaller by
+log(60) = 4.09), and a, b, rho, the residual variances and the correlations do not change.
+Report the unit with \code{lambda}. The default prior of \code{lambda} in \code{\link[=gibbs]{gibbs()}} (N(0, 10^2)) is
+meant for seconds, so a median time above 1000 gives a warning that suggests milliseconds.
 }

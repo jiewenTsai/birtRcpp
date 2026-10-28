@@ -134,6 +134,50 @@ test_that("input_data: long format is refused with how to reshape, repeated ids 
   expect_equal(ncol(input_data(resp = as.matrix(wide[items]), cov = dummies)$X), 2)
 })
 
+test_that("input_data: text responses, milliseconds and missing times get what to do; ecm(cov = values) says to name them", {
+  set.seed(17)
+  n <- 300
+  cond <- set_cond(n_subj = n, n_item = 4)
+  sim <- sim_data(cond, sim_para(cond, "null"), "null")
+  items <- paste0("q", 1:4)
+  times <- paste0(items, "_sec")
+  raw <- data.frame(sim$Y, sim$T, age = rnorm(n))
+  names(raw)[1:8] <- c(items, times)
+  text <- raw
+  text[items] <- lapply(text[items], function(x) ifelse(x == 1, "correct", "wrong"))
+  expect_error(input_data(resp = items, time = times, data = text),
+               "(values: \"wrong\", \"correct\"); recode them to 0/1, e.g. data[resp] <- lapply(data[resp], function(x) as.integer(x == \"correct\"))",
+               fixed = TRUE)
+  recoded <- text
+  recoded[items] <- lapply(recoded[items], function(x) as.integer(x == "correct"))
+  expect_equal(input_data(resp = items, time = times, data = recoded)$Y, input_data(resp = items, time = times, data = raw)$Y)
+  as_factor <- raw
+  as_factor[items] <- lapply(as_factor[items], factor)
+  expect_error(input_data(resp = items, time = times, data = as_factor), "as.integer(x == \"1\")", fixed = TRUE)
+  # milliseconds: a warning; the unit shifts only lambda
+  ms <- raw
+  ms[times] <- ms[times] * 1000
+  expect_warning(dat_ms <- input_data(resp = items, time = times, data = ms), "if these are milliseconds, divide them by 1000")
+  expect_no_warning(dat_s <- input_data(resp = items, time = times, data = raw))
+  fit_s <- estimates(ecm(dat_s, model = "null", se = FALSE))
+  fit_ms <- estimates(ecm(dat_ms, model = "null", se = FALSE))
+  shift <- fit_ms$est - fit_s$est
+  expect_equal(shift[startsWith(fit_s$parameter, "lambda")], rep(log(1000), 4), tolerance = 1e-5)
+  expect_equal(shift[!startsWith(fit_s$parameter, "lambda")], rep(0, sum(!startsWith(fit_s$parameter, "lambda"))), tolerance = 1e-5)
+  # missing times: counted, with the code to drop them
+  holes <- raw
+  holes$q1_sec[c(3, 5)] <- NA
+  expect_error(input_data(resp = items, time = times, data = holes),
+               "time has 2 missing values in 2 persons; birtRcpp needs complete data. Drop those persons first, e.g. data[stats::complete.cases(",
+               fixed = TRUE)
+  # a covariate vector given to ecm(cov = )
+  raw$age_c <- raw$age - mean(raw$age)
+  dat <- input_data(resp = items, time = times, cov = "age_c", data = raw)
+  msg <- tryCatch(ecm(dat, model = "latreg", cov = raw$age_c), error = conditionMessage)
+  expect_match(msg, "cov = takes the names of covariates already in the data (here: age_c), not their values", fixed = TRUE)
+  expect_lt(nchar(msg), 300)
+})
+
 test_that("multilevel IRT and dimension checks", {
   set.seed(13)
   cond <- set_cond(n_subj = 800, n_item = 10, n_feat = 2, n_iter = 1000, n_chain = 2)
