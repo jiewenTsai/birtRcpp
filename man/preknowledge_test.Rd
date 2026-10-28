@@ -14,7 +14,8 @@ preknowledge_test(object, compromised, ...)
 \item{...}{Unused.}
 }
 \value{
-A data frame with one row per test taker: the three statistics and their p-values.
+A data frame (class \link{rtirt_tbl}, printed with 3 decimals) with one row per test taker:
+the three statistics and their p-values.
 }
 \description{
 Statistics of Sinharay (2020) for test takers who may have known some items in advance (a set of

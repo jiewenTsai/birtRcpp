@@ -52,6 +52,10 @@ chains with different variances or poorly mixing tails; the table then has \code
 
 \item{row.names, optional}{Unused.}
 }
+\value{
+\code{estimates()}: a tibble of class \link{rtirt_tbl} (printed with 3 decimals; \code{x$est} and
+\code{as.data.frame(x)} keep the full precision). \code{coef()}: a named vector, printed with 3 decimals.
+}
 \description{
 \code{estimates()} returns the posterior summary of the item and structural parameters as a
 data frame: posterior mean (\code{est}), \code{sd}, 2.5\% and 97.5\% quantiles (\code{q025}, \code{q975}), R-hat and effective sample size (after

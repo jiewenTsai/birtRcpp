@@ -234,7 +234,8 @@ get_corr <- function(est, true) {
 #' @param type Residual distribution of the simulated data.
 #' @param speed_var Variance of speed (`"cross"`, `"latreg"`, `"null"`), as in the constructors.
 #' @param ... Passed to [gibbs()].
-#' @return A tibble with one row per replication and parameter block.
+#' @return A tibble (class [rtirt_tbl], printed with 3 decimals) with one row per replication and
+#'   parameter block.
 #' @export
 run_simulation <- function(cond, para, model = sim_models, quantile = NULL, pars = c("a", "b", "ability"),
                            type = "norm", speed_var = c("free", "fixed"), ...) {
@@ -252,7 +253,8 @@ run_simulation <- function(cond, para, model = sim_models, quantile = NULL, pars
   }
 
   purrr::map(replications, one_replication) |>
-    dplyr::bind_rows()
+    dplyr::bind_rows() |>
+    as_rtirt_tbl()
 }
 
 # the model object of run_simulation() (without the deprecation warnings of the constructors)

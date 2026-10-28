@@ -16,7 +16,7 @@ marginal_loglik(object, n_draws = NULL, Q = NULL)
 whose integrand in ability has sharper features: about 3e-4 per person from the exact value).}
 }
 \value{
-A draws x persons matrix.
+A draws x persons matrix (printed with 3 decimals; see \link{rtirt_tbl}).
 }
 \description{
 \code{marginal_loglik()} returns the log-likelihood of each person with the person parameters

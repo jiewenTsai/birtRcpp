@@ -15,7 +15,8 @@ scores(object, ...)
 \item{...}{Unused.}
 }
 \value{
-A tibble with \code{id}, \code{ability}, \code{ability_psd} and (RT models) \code{speed}, \code{speed_psd}.
+A tibble (class \link{rtirt_tbl}: printed with 3 decimals, stored in full precision) with
+\code{id}, \code{ability}, \code{ability_psd} and (RT models) \code{speed}, \code{speed_psd}.
 }
 \description{
 Posterior means (EAP) and posterior SDs of ability and speed, one row per person.

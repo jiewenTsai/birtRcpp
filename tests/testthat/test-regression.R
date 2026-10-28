@@ -21,7 +21,7 @@ expect_snapshot_match <- function(new, old, kind, label) {
     }
     expect_identical(new$equations, old$equations)
     expect_identical(new$algorithm, old$algorithm)
-    expect_identical(drop_hints(new$print), drop_hints(old$print))
+    expect_same_print(drop_hints(new$print), drop_hints(old$print), paste(label, "print()"))
   }
 
   if (kind == "gibbs") {

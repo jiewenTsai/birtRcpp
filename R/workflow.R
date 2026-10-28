@@ -154,7 +154,7 @@ print.normal_part <- function(x, ...) {
     s <- 1 / sqrt(x$prec)
     cat(sprintf("normal part of %d value(s): precision and linear term; mean = num / prec, sd = 1 / sqrt(prec)\n", length(m)))
   }
-  print(utils::head(data.frame(mean = m, sd = s), 6), digits = 3)
+  print_table(utils::head(data.frame(mean = m, sd = s), 6))
   if (length(m) > 6) cat("  ...\n")
   invisible(x)
 }
@@ -287,7 +287,7 @@ print.block_fit <- function(x, digits = 3, ...) {
     if (inherits(x, "block_model_fit")) "Gibbs for the declared model" else "Sampler from the building blocks",
     st$n_chain, st$n_iter, st$n_burnin, st$n_thin, x$time
   ))
-  print(format(utils::head(s, 20), digits = digits), row.names = FALSE)
+  print_table(utils::head(s, 20), digits)
   if (nrow(s) > 20) cat(sprintf("  ... %d more (summary(fit))\n", nrow(s) - 20))
   cat(sprintf(
     "max R-hat %.3f, min ESS %d%s\n", max(s$rhat, -Inf, na.rm = TRUE), min(s$ess),
@@ -608,10 +608,10 @@ run_em <- function(data, init, step, loglik = NULL, positive = character(), se =
 #' @export
 print.block_em <- function(x, digits = 3, ...) {
   cat(sprintf(
-    "EM from components: %s after %d iterations, log-likelihood %.4f\n",
+    "EM from components: %s after %d iterations, log-likelihood %.3f\n",
     if (x$converged) "converged" else "NOT converged", x$iterations, x$loglik
   ))
-  print(format(utils::head(x$estimates, 30), digits = digits), row.names = FALSE)
+  print_table(utils::head(x$estimates, 30), digits)
   if (nrow(x$estimates) > 30) cat(sprintf("  ... %d more (fit$estimates)\n", nrow(x$estimates) - 30))
   if (all(is.na(x$estimates$se))) {
     cat(if (!isTRUE(x$has_loglik)) {

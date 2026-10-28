@@ -181,7 +181,7 @@ check_check_inputs <- function(model, priors, sampler_priors) {
 print.rtirt_check <- function(x, n = 10, ...) {
   method <- attr(x, "method")
   if (is.null(method)) {                                # a subset of the table
-    print.data.frame(x, ...)
+    print_table(as.data.frame(unclass(x), stringsAsFactors = FALSE)[names(x)])
     return(invisible(x))
   }
   title <- if (method == "geweke") "Geweke (2004) joint distribution test" else "Simulation-based calibration (Talts et al., 2018)"
@@ -189,8 +189,9 @@ print.rtirt_check <- function(x, n = 10, ...) {
   cat(" ", attr(x, "setting"), "\n ", attr(x, "detail"), "\n", sep = "")
   ordered <- x[order(x$p.holm, x$p.value), , drop = FALSE]
   verdict <- if (attr(x, "passed")) "no evidence against the sampler" else "the sampler does NOT match the prior and likelihood"
-  cat(sprintf("  %d comparisons; smallest Holm-adjusted p = %.3g: %s\n\n", nrow(x), min(x$p.holm), verdict))
-  print.data.frame(utils::head(ordered, n), row.names = FALSE, digits = 3)
+  cat(sprintf("  %d comparisons; smallest Holm-adjusted %s: %s\n\n", nrow(x), p_text(min(x$p.holm)), verdict))
+  shown <- utils::head(ordered, n)
+  print_table(as.data.frame(unclass(shown), stringsAsFactors = FALSE)[names(x)])
   if (method == "geweke" && isTRUE(min(x$ess, na.rm = TRUE) < 400)) {
     min_ess <- min(x$ess, na.rm = TRUE)
     cat(sprintf("\n  Note: the smallest effective sample size is %d; with fewer than about 400 the z-tests are unreliable,\n  so raise n_iter (or narrow the priors of the slow parameters, the check holds for any proper prior).\n", min_ess))

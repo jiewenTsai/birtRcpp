@@ -30,8 +30,8 @@ print.rtirt <- function(x, ...) {
   cat(sprintf("  Reliability: %s\n", paste(sprintf("%s %.3f", names(rel), rel), collapse = ", ")))
   if (!is.null(x$post$fit)) {
     fit <- x$post$fit$table
-    looic <- if (is.na(fit$LOOIC)) "" else sprintf(", LOOIC %.1f", fit$LOOIC)
-    cat(sprintf("  Marginal: DIC %.1f (pD %.1f), WAIC %.1f%s\n", fit$DIC, fit$pD, fit$WAIC, looic))
+    looic <- if (is.na(fit$LOOIC)) "" else sprintf(", LOOIC %s", fmt_fixed(fit$LOOIC))
+    cat(sprintf("  Marginal: DIC %s (pD %s), WAIC %s%s\n", fmt_fixed(fit$DIC), fmt_fixed(fit$pD), fmt_fixed(fit$WAIC), looic))
   }
   convergence_warn(x)
   cat("Use summary(), coef(), scores(), estimates(), convergence(), fit_indices(), plot().\n")
@@ -49,9 +49,9 @@ convergence_warn <- function(x, level = "") {
   }
   if (check$share < 1) {
     max_rhat <- suppressWarnings(max(check$table$rhat, na.rm = TRUE))
-    rhat_text <- if (is.finite(max_rhat)) sprintf("max R-hat %.2f, ", max_rhat) else ""
-    cat(sprintf("  Warning%s: only %.1f%% of %d parameters have ESS > %d and R-hat < %.2f (%smin ESS %d); run longer (n_iter) or see convergence()\n",
-                where, 100 * check$share, check$n, check$ess, check$rhat, rhat_text, min(check$table$ess, na.rm = TRUE)))
+    rhat_text <- if (is.finite(max_rhat)) sprintf("max R-hat %s, ", fmt_fixed(max_rhat)) else ""
+    cat(sprintf("  Warning%s: only %.1f%% of %d parameters have ESS > %d and R-hat < %s (%smin ESS %d); run longer (n_iter) or see convergence()\n",
+                where, 100 * check$share, check$n, check$ess, format(check$rhat), rhat_text, min(check$table$ess, na.rm = TRUE)))
   }
 }
 
@@ -100,6 +100,8 @@ post_mcmc <- function(x) {
 #'   `ess_tail`.
 #' @param digits Decimals to print.
 #' @param ... Unused.
+#' @return `estimates()`: a tibble of class [rtirt_tbl] (printed with 3 decimals; `x$est` and
+#'   `as.data.frame(x)` keep the full precision). `coef()`: a named vector, printed with 3 decimals.
 #' @references Gelman, A., & Rubin, D. B. (1992). Inference from iterative simulation using
 #'   multiple sequences. *Statistical Science, 7*, 457-472.
 #'
@@ -115,7 +117,7 @@ estimates <- function(object, ...) {
 #' @export
 estimates.rtirt <- function(object, pars = NULL, method = c("auto", "gibbs", "ecm"), diagnostics = c("classic", "rank"), ...) {
   table <- estimates_rtirt(object, pars, method, diagnostics)
-  tibble::as_tibble(table)
+  as_rtirt_tbl(tibble::as_tibble(table))
 }
 
 # the parameter table of estimates(), as a data frame
@@ -250,7 +252,7 @@ as.data.frame.rtirt <- function(x, row.names = NULL, optional = FALSE, ...) {
 #' @export
 coef.rtirt <- function(object, ...) {
   table <- estimates(object)
-  stats::setNames(table$est, table$parameter)
+  as_rtirt_values(stats::setNames(table$est, table$parameter))
 }
 
 # prior of every parameter of estimates() (as in blavaan's summary), from the samplers in src/
@@ -321,7 +323,7 @@ summary.rtirt <- function(object, digits = 3, ...) {
     se = rtable(wide$se, "posterior SDs of the item parameters"),
     parameters = partable,
     covariance = person_cov_table(person_cov, "person covariance (posterior mean)"),
-    reliability = rtable(as.data.frame(as.list(reliability(object))),
+    reliability = rtable(as.data.frame(as.list(unclass(reliability(object)))),
                          "reliability of the EAP scores: var(EAP) / (var(EAP) + mean PSD^2)"))
   structure(tables, class = c("summary.rtirt", "rtirt_summary"))
 }
@@ -349,7 +351,8 @@ person_cov_table <- function(person_cov, title) {
 #' Posterior means (EAP) and posterior SDs of ability and speed, one row per person.
 #' @param object A sampled model.
 #' @param ... Unused.
-#' @return A tibble with `id`, `ability`, `ability_psd` and (RT models) `speed`, `speed_psd`.
+#' @return A tibble (class [rtirt_tbl]: printed with 3 decimals, stored in full precision) with
+#'   `id`, `ability`, `ability_psd` and (RT models) `speed`, `speed_psd`.
 #' @export
 scores <- function(object, ...) {
   UseMethod("scores")
@@ -364,7 +367,7 @@ scores.rtirt <- function(object, ...) {
     table$speed <- person$zeta$mean
     table$speed_psd <- person$zeta$sd
   }
-  tibble::as_tibble(table)
+  as_rtirt_tbl(tibble::as_tibble(table))
 }
 
 # posterior means and SDs of the persons: ECM (EAP) or Gibbs
@@ -395,7 +398,7 @@ reliability.rtirt <- function(object, ...) {
     eap_var / (eap_var + mean(p$sd^2))
   }
   speed <- if (!is.null(person$zeta)) c(speed = eap_reliability(person$zeta))
-  c(ability = eap_reliability(person$theta), speed)
+  as_rtirt_values(c(ability = eap_reliability(person$theta), speed))
 }
 
 #' Fit indices
@@ -421,8 +424,8 @@ fit_indices.rtirt <- function(object, ...) {
   if (has_em(object)) {
     fit <- object$ecm
     method <- if (fit$map) "ECM (MAP items)" else "ECM"
-    return(tibble::tibble(method = method, logLik = fit$logLik, npar = fit$npar, N = fit$nobs,
-                          AIC = fit$AIC, BIC = fit$BIC))
+    return(as_rtirt_tbl(tibble::tibble(method = method, logLik = fit$logLik, npar = fit$npar, N = fit$nobs,
+                                       AIC = fit$AIC, BIC = fit$BIC)))
   }
   need_post(object)
   marginal <- object$post$fit
@@ -430,12 +433,12 @@ fit_indices.rtirt <- function(object, ...) {
     message("computing the marginal log-likelihood ...")
     marginal <- marginal_fit(object)
   }
-  tibble::as_tibble(cbind(marginal$table, DIC_complete = dic(object)$dic))
+  as_rtirt_tbl(tibble::as_tibble(cbind(marginal$table, DIC_complete = dic(object)$dic)))
 }
 
 # marginal-likelihood criteria (stored by gibbs(fit_indices = TRUE))
 marginal_fit <- function(object) {
-  loglik <- marginal_loglik(object)
+  loglik <- unclass(marginal_loglik(object))
   draws <- post_draws(object, Inf)
   cov_names <- colnames(object$post$settings$X) %||% character()
   post_mean <- colMeans(draws)
@@ -480,7 +483,7 @@ dic.rtirt <- function(object, ...) {
   loglik <- object$post$loglik[after_burnin, , drop = FALSE]
   d_bar <- -2 * mean(loglik)
   d_hat <- -2 * complete_loglik(object)
-  data.frame(d_bar = d_bar, d_hat = d_hat, p_d = d_bar - d_hat, dic = d_bar + (d_bar - d_hat))
+  as_rtirt_tbl(data.frame(d_bar = d_bar, d_hat = d_hat, p_d = d_bar - d_hat, dic = d_bar + (d_bar - d_hat)))
 }
 
 # complete-data log-likelihood at the posterior means (mirrors the loglik in the C++ samplers)
@@ -625,8 +628,8 @@ print.rtirt_convergence <- function(x, ...) {
   }
   ess_note <- if (x$rank) " (bulk and tail)" else ""
   rhat_note <- if (x$rank) " (rank-normalized)" else ""
-  cat(sprintf("%.1f%% of %d parameters with ESS%s > %d and R-hat%s < %.2f\n", 100 * x$share, x$n,
-              ess_note, x$ess, rhat_note, x$rhat))
+  cat(sprintf("%.1f%% of %d parameters with ESS%s > %d and R-hat%s < %s\n", 100 * x$share, x$n,
+              ess_note, x$ess, rhat_note, format(x$rhat)))
   if (x$n_chain < 2) {
     cat("  1 chain: R-hat cannot be computed (it needs n_chain >= 2), so only the ESS is checked\n")
   }
@@ -669,7 +672,7 @@ compare_para <- function(object, par = "a") {
   }
   can_correlate <- length(est) > 2 && stats::sd(est) > 0 && stats::sd(true) > 0
   corr <- if (can_correlate) stats::cor(est, true) else NA_real_
-  tibble::tibble(par = label, n = length(est), bias = get_bias(est, true), rmse = get_rmse(est, true), corr = corr)
+  as_rtirt_tbl(tibble::tibble(par = label, n = length(est), bias = get_bias(est, true), rmse = get_rmse(est, true), corr = corr))
 }
 
 #' @importFrom coda as.mcmc.list
@@ -808,7 +811,7 @@ print.rtirt_qset <- function(x, ...) {
     cat("  not sampled yet: fits <- gibbs(models)\n")
     return(invisible(x))
   }
-  coefs <- stats::coef(x)
+  coefs <- unclass(stats::coef(x))
   key_pattern <- if (x$type == "rtirt_cross") "^rho\\[" else "^(beta|b_ability)"
   key <- grepl(key_pattern, rownames(coefs))
   print_table(data.frame(parameter = rownames(coefs)[key], coefs[key, , drop = FALSE], check.names = FALSE))
@@ -823,7 +826,7 @@ print.rtirt_qset <- function(x, ...) {
 coef.rtirt_qset <- function(object, ...) {
   coefs <- sapply(object$models, stats::coef)
   colnames(coefs) <- sprintf("q=%s", format(object$quantile))
-  coefs
+  as_rtirt_values(coefs)
 }
 
 #' @rdname rtirt_qset
@@ -831,7 +834,7 @@ coef.rtirt_qset <- function(object, ...) {
 estimates.rtirt_qset <- function(object, ...) {
   one_level <- function(model, q) cbind(q = q, estimates_rtirt(model, NULL, "auto", "classic"))
   tables <- Map(one_level, object$models, object$quantile)
-  tibble::as_tibble(do.call(rbind, tables))
+  as_rtirt_tbl(tibble::as_tibble(do.call(rbind, tables)))
 }
 
 #' @rdname rtirt_qset
@@ -878,29 +881,4 @@ plot.rtirt_qset <- function(x, pars = NULL, ...) {
 #' @export
 gibbs.default <- function(data, ...) {
   stop("data must come from input_data(), e.g. gibbs(input_data(...), model = \"cross\")", call. = FALSE)
-}
-
-# plain table (as in birt): numbers right-aligned with fixed decimals, text left-aligned
-print_table <- function(df, digits = 3) {
-  format_column <- function(x) {
-    if (!is.numeric(x)) {
-      return(ifelse(is.na(x), "", as.character(x)))
-    }
-    if (is.integer(x)) {
-      return(ifelse(is.na(x), "", formatC(x, format = "d", big.mark = "")))
-    }
-    ifelse(is.na(x), "", formatC(x, digits = digits, format = "f"))
-  }
-  cells <- vapply(df, format_column, character(nrow(df)))
-  if (is.null(dim(cells))) {
-    cells <- matrix(cells, nrow = nrow(df))
-  }
-  header <- names(df)
-  widths <- pmax(nchar(header), apply(cells, 2, function(x) max(nchar(x), 0)))
-  left <- !vapply(df, is.numeric, TRUE)
-  format_row <- function(x) {
-    padded <- ifelse(left, sprintf("%-*s", widths, x), sprintf("%*s", widths, x))
-    sub("\\s+$", "", paste(padded, collapse = "  "))
-  }
-  cat(c(format_row(header), apply(cells, 1, format_row)), sep = "\n")
 }

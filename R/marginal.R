@@ -116,7 +116,7 @@ marg_ll_draw <- function(object, p, Q = 41) {
 #'   `rtirt_cross` quantile models).
 #' @param Q Gauss-Hermite nodes for ability (default 41; 61 for `rtirt_cross` quantile models,
 #'   whose integrand in ability has sharper features: about 3e-4 per person from the exact value).
-#' @return A draws x persons matrix.
+#' @return A draws x persons matrix (printed with 3 decimals; see [rtirt_tbl]).
 #' @export
 marginal_loglik <- function(object, n_draws = NULL, Q = NULL) {
   need_post(object)
@@ -126,5 +126,5 @@ marginal_loglik <- function(object, n_draws = NULL, Q = NULL) {
   M <- post_draws(object, n_draws)
   xn <- colnames(object$post$settings$X) %||% character()
   items <- object$data$items
-  t(apply(M, 1, function(row) marg_ll_draw(object, draw_pars(row, items, xn), Q)))
+  as_rtirt_values(t(apply(M, 1, function(row) marg_ll_draw(object, draw_pars(row, items, xn), Q))))
 }

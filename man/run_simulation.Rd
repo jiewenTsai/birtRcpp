@@ -33,7 +33,8 @@ run_simulation(
 \item{...}{Passed to \code{\link[=gibbs]{gibbs()}}.}
 }
 \value{
-A tibble with one row per replication and parameter block.
+A tibble (class \link{rtirt_tbl}, printed with 3 decimals) with one row per replication and
+parameter block.
 }
 \description{
 As \code{runSimulation()} in Julia: \code{cond$n_rep} replications with fixed item parameters and new

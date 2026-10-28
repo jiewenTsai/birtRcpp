@@ -204,10 +204,7 @@ print.block_lm_test <- function(x, digits = 3, ...) {
   if (x$df[1] < attr(x, "df_full")) cat(sprintf("all: %d of the %d directions are absorbed by the null parameters; tested in the other %d\n",
                                                   attr(x, "df_full") - x$df[1], attr(x, "df_full"), x$df[1]))
   d <- as.data.frame(unclass(x)); attributes(d)[c("add", "new", "score", "W", "objective", "df_full")] <- NULL
-  d$statistic <- round(d$statistic, digits); d$p.value <- format.pval(d$p.value, digits = digits, eps = 1e-4)
-  d$p.holm <- ifelse(is.na(d$p.holm), "", format.pval(d$p.holm, digits = digits, eps = 1e-4))
-  d$estimate <- ifelse(is.na(d$estimate), "", format(round(d$estimate, digits)))
   if (nrow(d) == 1) d$p.holm <- d$estimate <- NULL
-  print(d, row.names = FALSE)
+  print_table(d, digits)
   invisible(x)
 }

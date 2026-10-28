@@ -14,8 +14,9 @@ person_fit(object, flag = 0.95, ...)
 \item{...}{Unused.}
 }
 \value{
-A data frame with \code{id}, \code{lt}, \code{df}, \code{p_flag} and \code{flagged}; attribute \code{share} (share of
-flagged test takers) and \code{share_mean} (share with \code{lt} above the 95\% quantile).
+A data frame (class \link{rtirt_tbl}, printed with 3 decimals) with \code{id}, \code{lt}, \code{df}, \code{p_flag}
+and \code{flagged}; attribute \code{share} (share of flagged test takers) and \code{share_mean} (share with \code{lt}
+above the 95\% quantile).
 }
 \description{
 The person-fit statistic of Marianti, Fox, Avetisyan, Veldkamp & Tijmstra (2014) for the lognormal

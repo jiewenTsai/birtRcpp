@@ -356,9 +356,9 @@ vb_table <- function(E, Q) {
 #' @param ... Unused.
 #' @export
 print.block_model_vi <- function(x, ...) {
-  cat(sprintf("CAVI for the declared model: %s after %d sweeps (%d rounds), ELBO %.4f, %.1f s\n",
+  cat(sprintf("CAVI for the declared model: %s after %d sweeps (%d rounds), ELBO %.3f, %.1f s\n",
               if (x$converged) "converged" else "NOT converged", x$iterations, x$cycles, x$elbo[length(x$elbo)], x$time))
-  print(format(utils::head(x$summary, 30), digits = 3), row.names = FALSE)
+  print_table(utils::head(x$summary, 30))
   if (nrow(x$summary) > 30) cat(sprintf("  ... %d more (fit$summary)\n", nrow(x$summary) - 30))
   cat("Means and SDs of q. Mean-field SDs of item parameters are too small; use gibbs() for intervals.\n")
   invisible(x)

@@ -15,8 +15,9 @@
 #' @param object A model sampled by [gibbs()].
 #' @param flag Posterior probability above which a pattern is flagged.
 #' @param ... Unused.
-#' @return A data frame with `id`, `lt`, `df`, `p_flag` and `flagged`; attribute `share` (share of
-#'   flagged test takers) and `share_mean` (share with `lt` above the 95% quantile).
+#' @return A data frame (class [rtirt_tbl], printed with 3 decimals) with `id`, `lt`, `df`, `p_flag`
+#'   and `flagged`; attribute `share` (share of flagged test takers) and `share_mean` (share with `lt`
+#'   above the 95% quantile).
 #' @references Marianti, S., Fox, J.-P., Avetisyan, M., Veldkamp, B. P., & Tijmstra, J. (2014).
 #'   Testing for aberrant behavior in response time modeling. *Journal of Educational and Behavioral
 #'   Statistics, 39*, 426-451.
@@ -52,7 +53,7 @@ person_fit <- function(object, flag = 0.95, ...) {
   id <- object$data$id %||% seq_along(rt_fit$lt)
   table <- data.frame(id = id, lt = rt_fit$lt, df = n_item, p_flag = rt_fit$exceed, flagged = rt_fit$exceed >= flag)
   share_mean <- mean(table$lt > stats::qchisq(0.95, n_item))
-  structure(table, share = mean(table$flagged), share_mean = share_mean)
+  structure(as_rtirt_tbl(table), share = mean(table$flagged), share_mean = share_mean)
 }
 
 #' Test of conditional independence between responses and response times
@@ -142,9 +143,9 @@ numeric_information <- function(score, z0) {
 print.rtirt_ci_test <- function(x, digits = 3, ...) {
   overall <- attr(x, "overall")
   cat("Conditional independence of responses and response times (van der Linden & Glas, 2010)\n")
-  cat(sprintf("  all items: LM = %.2f, df = %d, p = %.3g\n\n", overall[["statistic"]], as.integer(overall[["df"]]),
-              overall[["p.value"]]))
-  print.data.frame(x, digits = digits, row.names = FALSE)
+  cat(sprintf("  all items: LM = %s, df = %d, %s\n\n", fmt_fixed(overall[["statistic"]], digits), as.integer(overall[["df"]]),
+              p_text(overall[["p.value"]], digits)))
+  print_table(as.data.frame(unclass(x), stringsAsFactors = FALSE)[names(x)], digits)
   invisible(x)
 }
 
@@ -167,7 +168,8 @@ print.rtirt_ci_test <- function(x, digits = 3, ...) {
 #' @param object A model fitted by [ecm()] or [gibbs()].
 #' @param compromised Items in the compromised set (names or a logical / integer index).
 #' @param ... Unused.
-#' @return A data frame with one row per test taker: the three statistics and their p-values.
+#' @return A data frame (class [rtirt_tbl], printed with 3 decimals) with one row per test taker:
+#'   the three statistics and their p-values.
 #' @references Sinharay, S. (2020). Detection of item preknowledge using response times. *Applied
 #'   Psychological Measurement, 44*, 376-392.
 #' @examples
@@ -198,9 +200,10 @@ preknowledge_test <- function(object, compromised, ...) {
   lambda_s <- (speed(in_set) - speed(!in_set)) / sqrt(1 / sum(w[in_set]) + 1 / sum(w[!in_set]))
   l_s <- vapply(seq_len(nrow(Y)), function(i) ability_lr(Y[i, ], in_set, par$a, par$b), 0)
 
-  data.frame(id = data$id %||% seq_len(nrow(Y)), chi_pf = chi, p_chi_pf = stats::pchisq(chi, n_item - 1, lower.tail = FALSE),
-             Lambda_s = lambda_s, p_Lambda_s = stats::pnorm(lambda_s, lower.tail = FALSE),
-             L_s = l_s, p_L_s = stats::pnorm(l_s, lower.tail = FALSE))
+  as_rtirt_tbl(data.frame(id = data$id %||% seq_len(nrow(Y)), chi_pf = chi,
+                          p_chi_pf = stats::pchisq(chi, n_item - 1, lower.tail = FALSE),
+                          Lambda_s = lambda_s, p_Lambda_s = stats::pnorm(lambda_s, lower.tail = FALSE),
+                          L_s = l_s, p_L_s = stats::pnorm(l_s, lower.tail = FALSE)))
 }
 
 # item parameters of the fit: posterior means (gibbs()) or the ecm() estimates

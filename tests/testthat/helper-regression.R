@@ -173,6 +173,41 @@ regression_text <- function(x) {
   gsub("[0-9]+(\\.[0-9]+)? s\\b", "<time> s", lines, perl = TRUE)
 }
 
+# The numbers of printed text, and the text with each number replaced by "<n>". Since 0.2.0
+# print() shows 3 decimals (AIC 16720.1 became AIC 16720.064), so printed text is compared with
+# expect_same_print(): the same words, and the same numbers up to the rounding of each printing.
+number_pattern <- "-?[0-9]+(\\.[0-9]+)?"
+
+print_numbers <- function(lines) {
+  tokens <- regmatches(lines, gregexpr(number_pattern, lines, perl = TRUE))
+  unlist(tokens)
+}
+
+print_skeleton <- function(lines) {
+  gsub(number_pattern, "<n>", lines, perl = TRUE)
+}
+
+decimals <- function(token) {
+  ifelse(grepl(".", token, fixed = TRUE), nchar(sub("^[^.]*\\.", "", token)), 0)
+}
+
+# new and old printings of the same values: identical where both show the same decimals, else
+# within half a unit of the last decimal of each (|new - old| <= 0.5 * 10^-d_old + 0.5 * 10^-d_new)
+expect_same_print <- function(new, old, label = "print") {
+  expect_identical(print_skeleton(new), print_skeleton(old), label = paste(label, "text"))
+  new_tokens <- print_numbers(new)
+  old_tokens <- print_numbers(old)
+  if (length(new_tokens) != length(old_tokens)) {
+    return(invisible())
+  }
+  same_decimals <- decimals(new_tokens) == decimals(old_tokens)
+  expect_identical(new_tokens[same_decimals], old_tokens[same_decimals], label = paste(label, "numbers"))
+  allowed <- 0.5 * 10^-decimals(old_tokens) + 0.5 * 10^-decimals(new_tokens) + 1e-9
+  off <- abs(as.numeric(new_tokens) - as.numeric(old_tokens)) > allowed
+  expect_false(any(off[!same_decimals]), label = paste(label, "numbers beyond rounding:",
+                                                       paste(new_tokens[off], old_tokens[off], sep = " vs ", collapse = ", ")))
+}
+
 # the tables of summary(), as plain data frames
 regression_tables <- function(summary_list) {
   is_table <- vapply(summary_list, is.data.frame, logical(1))

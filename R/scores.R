@@ -350,11 +350,6 @@ print.rtirt_score_test <- function(x, digits = 3, ...) {
               attr(x, "moderator"), attr(x, "decorrelate"), clusters))
   table <- as.data.frame(unclass(x))
   attributes(table)[c("test", "decorrelate", "moderator", "clusters")] <- NULL
-  table$statistic <- round(table$statistic, digits)
-  table$p.value <- format.pval(table$p.value, digits = digits, eps = 1e-4)
-  if (!is.null(table$p.holm)) {
-    table$p.holm <- ifelse(is.na(table$p.holm), "", format.pval(table$p.holm, digits = digits, eps = 1e-4))
-  }
-  print(table, row.names = FALSE)
+  print_table(table, digits)
   invisible(x)
 }

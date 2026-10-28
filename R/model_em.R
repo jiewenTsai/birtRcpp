@@ -830,10 +830,10 @@ bm_step <- function(E, C) function(s, d) {
 #' @param x A fit of `ecm()`.
 #' @export
 print.block_model_ecm <- function(x, ...) {
-  cat(sprintf("%s for the declared model: %s after %d iterations (%d rounds of the grid), %s %.4f\n",
+  cat(sprintf("%s for the declared model: %s after %d iterations (%d rounds of the grid), %s %s\n",
               switch(x$ecm$method %||% "ecm", ecm = "ECM", newton = "Newton (nlminb)", `quasi-newton` = "Quasi-Newton (nlminb)"), if (x$converged) "converged" else "NOT converged",
-              x$iterations, x$cycles, x$objective, x$loglik))
-  print(format(utils::head(x$estimates, 30), digits = 3), row.names = FALSE)
+              x$iterations, x$cycles, x$objective, fmt_fixed(x$loglik)))
+  print_table(utils::head(x$estimates, 30))
   if (nrow(x$estimates) > 30) cat(sprintf("  ... %d more (fit$estimates)\n", nrow(x$estimates) - 30))
   if (all(is.na(x$estimates$se))) cat("se = NA: no standard errors (se = FALSE, not converged, or the Hessian is singular)\n")
   invisible(x)
@@ -973,7 +973,7 @@ check_ecm <- function(model = NULL, steps = NULL, latent = NULL, nodes = NULL, p
 #' @export
 print.em_check <- function(x, ...) {
   cat(sprintf("%s (%d starting values): %s\n", attr(x, "what") %||% "ECM check", attr(x, "n_start"), if (attr(x, "passed")) "all checks passed" else "SOME CHECKS FAILED"))
-  d <- as.data.frame(unclass(x)); d$worst <- signif(d$worst, 3)
+  d <- as.data.frame(unclass(x)); d$worst <- signif(d$worst, 3)     # tolerances such as 1e-08: scientific, not 3 decimals
   print(d, row.names = FALSE)
   invisible(x)
 }

@@ -138,14 +138,10 @@ partable_labels <- function(bayes) {
     rhat = "Rhat", ess = "ESS", z = "z-value", pvalue = "P(>|z|)")
 }
 
-# formatted cells: a character matrix, one column per numeric column of the table
+# formatted cells: a character matrix, one column per numeric column of the table (3 decimals,
+# ESS without decimals, p below 0.001 as "<0.001"; see fmt_column())
 partable_cells <- function(table, columns, digits) {
-  format_column <- function(name) {
-    v <- table[[name]]
-    formatted <- if (name == "ess") formatC(round(v), format = "d") else formatC(v, digits = digits, format = "f")
-    ifelse(is.na(v), "", formatted)
-  }
-  cells <- vapply(columns, format_column, character(nrow(table)))
+  cells <- vapply(columns, function(name) fmt_column(table[[name]], name, digits), character(nrow(table)))
   if (is.null(dim(cells))) {
     cells <- matrix(cells, nrow = 1)
   }

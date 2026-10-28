@@ -7,14 +7,16 @@
 \usage{
 \method{anova}{rtirt}(object, ...)
 
-\method{print}{rtirt_anova}(x, digits = max(getOption("digits"), 7), ...)
+\method{print}{rtirt_anova}(x, digits = 3, signif.stars = getOption("show.signif.stars", TRUE), ...)
 }
 \arguments{
 \item{object, ...}{Fits of \code{\link[=ecm]{ecm()}} (or of \code{\link[=gibbs]{gibbs()}}) of the same data.}
 
 \item{x}{The result of \code{anova()}.}
 
-\item{digits}{Significant digits (default 7, so that AIC and BIC keep a decimal).}
+\item{digits}{Decimals (log-likelihood, AIC, BIC, Chisq, p-value; \code{npar} and \code{Df} are counts).}
+
+\item{signif.stars}{Significance stars after the p-value, as in \code{\link[stats:printCoefmat]{stats::printCoefmat()}}.}
 }
 \value{
 A data frame of class \code{rtirt_anova} (and \code{anova}), printed with a heading that names

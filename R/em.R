@@ -708,9 +708,9 @@ print_em <- function(x) {
     if (f$converged) "" else " (not converged)", f$secs
   ))
   if (f$map) {
-    cat(sprintf("  log posterior %.3f, npar %d (no AIC / BIC: the objective includes the priors)\n", f$logLik, f$npar))
+    cat(sprintf("  log posterior %s, npar %d (no AIC / BIC: the objective includes the priors)\n", fmt_fixed(f$logLik), f$npar))
   } else {
-    cat(sprintf("  logLik %.3f, npar %d, AIC %.1f, BIC %.1f\n", f$logLik, f$npar, f$AIC, f$BIC))
+    cat(sprintf("  logLik %s, npar %d, AIC %s, BIC %s\n", fmt_fixed(f$logLik), f$npar, fmt_fixed(f$AIC), fmt_fixed(f$BIC)))
   }
   rel <- reliability(x)
   cat(sprintf("  Reliability: %s\n", paste(sprintf("%s %.3f", names(rel), rel), collapse = ", ")))
@@ -748,7 +748,7 @@ ecm_extreme_warning <- function(x) {
 }
 
 format_number <- function(v) {
-  ifelse(is.na(v), "NA", formatC(v, digits = 3, format = "fg"))
+  fmt_fixed(v, na = "NA")
 }
 
 #' @export
@@ -855,10 +855,28 @@ anova_ecm <- function(fits, labels, heading_models) {
 
 #' @rdname anova.rtirt
 #' @param x The result of `anova()`.
-#' @param digits Significant digits (default 7, so that AIC and BIC keep a decimal).
+#' @param digits Decimals (log-likelihood, AIC, BIC, Chisq, p-value; `npar` and `Df` are counts).
+#' @param signif.stars Significance stars after the p-value, as in [stats::printCoefmat()].
 #' @export
-print.rtirt_anova <- function(x, digits = max(getOption("digits"), 7), ...) {
-  NextMethod(digits = digits)
+print.rtirt_anova <- function(x, digits = 3, signif.stars = getOption("show.signif.stars", TRUE), ...) {
+  cat(attr(x, "heading"), sep = "\n")
+  table <- data.frame(model = rownames(x), stringsAsFactors = FALSE)
+  for (column in names(x)) {
+    table[[column]] <- x[[column]]
+  }
+  names(table)[1] <- ""
+  p <- x[["Pr(>Chisq)"]]
+  stars <- !is.null(p) && isTRUE(signif.stars) && any(!is.na(p))
+  if (stars) {
+    codes <- stats::symnum(p, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+                           symbols = c("***", "**", "*", ".", " "))
+    table[[" "]] <- ifelse(is.na(p), "", as.character(codes))
+  }
+  print_table(table, digits)
+  if (stars) {
+    cat("---\nSignif. codes:  ", attr(codes, "legend"), "\n", sep = "")
+  }
+  invisible(x)
 }
 
 anova_gibbs <- function(fits, labels, heading_models) {
@@ -901,7 +919,7 @@ summary_em <- function(object, digits) {
       items = rtable(w$est, "item parameters (ECM estimates)"),
       se = rtable(w$se, "standard errors of the item parameters"),
       parameters = p,
-      reliability = rtable(as.data.frame(as.list(reliability(object))), "reliability of the EAP scores (final E-step)")
+      reliability = rtable(as.data.frame(as.list(unclass(reliability(object)))), "reliability of the EAP scores (final E-step)")
     ),
     class = c("summary.rtirt", "rtirt_summary")
   )
