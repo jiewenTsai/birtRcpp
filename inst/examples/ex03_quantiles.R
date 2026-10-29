@@ -15,7 +15,8 @@ qs # one line per quantile level
 # fault: check convergence() and do not read the extreme levels (rho above all) on skewed data.
 # the same levels by ECM: maximum working likelihood, sandwich standard errors, a few seconds per level
 qe <- ecm(d_cross, model = "cross", quantile = q_levels)
-qe
+qe # q = 0.1 to 0.75: the Gibbs posterior means within about 0.01. q = 0.9: ECM climbs to one of the modes of the
+# working likelihood (item04 about 0.77, item07 about -0.40 here), where the Gibbs chains split between modes
 coefs <- coef(qs)
 rho_q <- coefs[grepl("^rho", rownames(coefs)), ] # rho_i(q): items x quantiles
 rho_mean <- estimates(mean_fit, pars = "^rho")$est
