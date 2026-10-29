@@ -116,8 +116,10 @@ dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
 fit <- ecm(dat, model = "cross")
 fit
 head(estimates(fit))
+\donttest{
 fit_q <- ecm(dat, model = "cross", quantile = 0.9) # the 0.9-quantile of the log times
 estimates(fit_q, pars = "^rho")
+}
 }
 \references{
 Bock, R. D., & Aitkin, M. (1981). Marginal maximum likelihood estimation of
