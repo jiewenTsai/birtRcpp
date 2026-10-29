@@ -1,4 +1,4 @@
-# birtRcpp (development version)
+# birtRcpp 0.3.0
 
 * `ecm()` fits the quantile models: `ecm(dat, model = "cross", quantile = 0.9)` (and `model = "latent"`) maximizes the marginal ALD working likelihood, with ability on the Gauss-Hermite nodes and speed integrated in closed form given ability. The E-step and the item step are those of the normal models; the response-time and structural parameters are updated by `nlminb()` with the analytic gradient. The standard errors are sandwich standard errors (`H^-1 J H^-1`, J from the scores of the persons), since the ALD is not the distribution of the data. A vector of levels gives an `rtirt_qset` of ECM fits (`print()`, `coef()`, `estimates()`, `plot()`, `convergence()`). `print()` and `summary()` say that the logLik, AIC and BIC are of the working likelihood; `anova()` refuses quantile fits from `ecm()` as from `gibbs()`; `prior = "map"` is for the normal models only.
 * `gibbs()` of a quantile model starts at an `ecm()` fit at the same quantile (`init = fit`), or at its own ECM fit (`init = "ecm"`, one per level for several levels); before, quantile models started only from random values.

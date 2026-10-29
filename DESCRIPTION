@@ -1,7 +1,7 @@
 Package: birtRcpp
 Type: Package
 Title: BIvariate Response Time Modeling with 'Rcpp'
-Version: 0.2.0.9000
+Version: 0.3.0
 Authors@R: person("Jie-Wen", "Tsai", role = c("aut", "cre"), email = "tsai.jiewen@gmail.com")
 Description: Item response and response time models fitted from their full conditionals.
     A built-in model is chosen with ecm(data, model = ...) or gibbs(data, model = ...): the
