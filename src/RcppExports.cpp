@@ -422,6 +422,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// ald_rt_grad_cpp
+Rcpp::List ald_rt_grad_cpp(const arma::mat& B, const arma::vec& s, double v, double q);
+RcppExport SEXP _birtRcpp_ald_rt_grad_cpp(SEXP BSEXP, SEXP sSEXP, SEXP vSEXP, SEXP qSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type B(BSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type s(sSEXP);
+    Rcpp::traits::input_parameter< double >::type v(vSEXP);
+    Rcpp::traits::input_parameter< double >::type q(qSEXP);
+    rcpp_result_gen = Rcpp::wrap(ald_rt_grad_cpp(B, s, v, q));
+    return rcpp_result_gen;
+END_RCPP
+}
 // ml_eval
 Rcpp::NumericMatrix ml_eval(const Rcpp::NumericVector& coef, const Rcpp::List& ids, const Rcpp::List& vals, const Rcpp::IntegerVector& dims, int nr, int nc);
 RcppExport SEXP _birtRcpp_ml_eval(SEXP coefSEXP, SEXP idsSEXP, SEXP valsSEXP, SEXP dimsSEXP, SEXP nrSEXP, SEXP ncSEXP) {
@@ -527,6 +541,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_birtRcpp_gibbs_mlirt", (DL_FUNC) &_birtRcpp_gibbs_mlirt, 9},
     {"_birtRcpp_gibbs_rtirt", (DL_FUNC) &_birtRcpp_gibbs_rtirt, 11},
     {"_birtRcpp_log_ald_rt_cpp", (DL_FUNC) &_birtRcpp_log_ald_rt_cpp, 4},
+    {"_birtRcpp_ald_rt_grad_cpp", (DL_FUNC) &_birtRcpp_ald_rt_grad_cpp, 4},
     {"_birtRcpp_ml_eval", (DL_FUNC) &_birtRcpp_ml_eval, 6},
     {"_birtRcpp_ml_part", (DL_FUNC) &_birtRcpp_ml_part, 12},
     {"_birtRcpp_rpg1_r", (DL_FUNC) &_birtRcpp_rpg1_r, 1},

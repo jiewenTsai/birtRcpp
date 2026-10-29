@@ -105,6 +105,10 @@ pg_mean <- function(eta) {
     .Call(`_birtRcpp_log_ald_rt_cpp`, B, s, v, q)
 }
 
+.ald_rt_grad <- function(B, s, v, q) {
+    .Call(`_birtRcpp_ald_rt_grad_cpp`, B, s, v, q)
+}
+
 .ml_eval <- function(coef, ids, vals, dims, nr, nc) {
     .Call(`_birtRcpp_ml_eval`, coef, ids, vals, dims, nr, nc)
 }

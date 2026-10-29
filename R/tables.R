@@ -210,7 +210,13 @@ rtirt_header <- function(x) {
 fit_line <- function(x, cond) {
   if (has_em(x)) {
     fit <- x$ecm
-    method <- if (fit$map) "marginal posterior mode (item priors of gibbs())" else "maximum marginal likelihood"
+    method <- if (fit$map) {
+      "marginal posterior mode (item priors of gibbs())"
+    } else if (isTRUE(x$qr)) {
+      "maximum marginal ALD working likelihood"
+    } else {
+      "maximum marginal likelihood"
+    }
     converged <- if (fit$converged) "" else " (not converged)"
     return(sprintf("  %s (ECM, %d Gauss-Hermite nodes): %d iterations%s, %.1f s",
                    method, fit$nodes, fit$iterations, converged, fit$secs))

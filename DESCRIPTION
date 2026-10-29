@@ -1,7 +1,7 @@
 Package: birtRcpp
 Type: Package
 Title: BIvariate Response Time Modeling with 'Rcpp'
-Version: 0.2.0
+Version: 0.2.0.9000
 Authors@R: person("Jie-Wen", "Tsai", role = c("aut", "cre"), email = "tsai.jiewen@gmail.com")
 Description: Item response and response time models fitted from their full conditionals.
     A built-in model is chosen with ecm(data, model = ...) or gibbs(data, model = ...): the
@@ -13,7 +13,8 @@ Description: Item response and response time models fitted from their full condi
     Polya-Gamma bounds for logistic likelihoods (Polson, Scott and Windle, 2013,
     <doi:10.1080/01621459.2013.829001>), adaptive or Bock-Aitkin quadrature (Bock and Aitkin,
     1981, <doi:10.1007/BF02293801>) with normal-linear latent variables integrated exactly, and
-    Louis' standard errors. The same steps drive Gibbs sampling (gibbs(); conjugate updates and
+    Louis' standard errors; quantile models maximize the asymmetric Laplace working likelihood,
+    with sandwich standard errors. The same steps drive Gibbs sampling (gibbs(); conjugate updates and
     Metropolis-adjusted Langevin steps), with samplers in C++ ('RcppArmadillo') that port the
     'Julia' package 'ExtendedRtIrtModeling.jl' (its function names are kept as aliases). Both
     estimators have a check: check_ecm(), and check_sampler() with the Geweke (2004,

@@ -51,7 +51,6 @@ algorithm.rtirt <- function(object, method = NULL, collapse = NULL, format = c("
   format <- match.arg(format)
   fitted_em <- is.null(object$post) && !is.null(object$ecm)
   method <- match.arg(method %||% if (fitted_em) "ecm" else "gibbs", c("gibbs", "ecm"))
-  if (method == "ecm" && isTRUE(object$qr)) stop("ecm() fits the normal models; quantile models use gibbs()", call. = FALSE)
   collapse <- collapse %||% isTRUE(object$post$settings$collapse)
   ctx <- al_context(object)
   secs <- if (method == "gibbs") al_gibbs(ctx, collapse) else al_em(ctx, object)
@@ -631,14 +630,21 @@ al_em <- function(C, object) {
         "\\text{%d iterations, %s, log-likelihood %s}", f$iterations,
         if (isTRUE(f$converged)) "converged" else "not converged", fmt_num(f$logLik)
       )
-    }, if (map) "prior = \"map\": priors on the item parameters" else "maximum marginal likelihood"),
+    }, if (map) "prior = \"map\": priors on the item parameters" else if (C$qr) sprintf("maximum marginal working likelihood: ALD at q = %s", format(C$q)) else "maximum marginal likelihood"),
     L(
       "\\theta_{jq}", "=", sprintf("%sz_q,\\; q = 1, \\ldots, %d", if (P && eng %in% c("mlirt", "rtirt")) sprintf("x_j^\\top\\beta%s + ", if (eng == "rtirt") "_1" else "") else "", Q),
       "Gauss-Hermite nodes z_q and weights g_q of N(0, 1)"
     )
   )
   ll_rt <- if (rt) L("\\ell_{jq}", "\\leftarrow", "\\ell_{jq} + \\log \\mathcal{N}_K(\\log t_j \\mid \\theta_{jq})", "speed integrated in closed form (normal given ability)")
-  speed <- if (rt) {
+  if (C$qr) {
+    ll_rt <- L("\\ell_{jq}", "\\leftarrow", "\\ell_{jq} + L_{jq},\\; L_{jq} = \\log p(\\log t_j \\mid \\theta_{jq})", if (eng == "cross") {
+      "ALD log times: piecewise linear in speed, so a sum of K + 1 truncated-normal pieces (.log_ald_rt())"
+    } else {
+      "normal log times convolved with the ALD of speed: closed form (log_norm_ald())"
+    })
+  }
+  speed <- if (rt && !C$qr) {
     list(
       L("\\zeta_j \\mid \\theta_{jq}, t_j", "\\sim", "\\mathcal{N}(M_{jq},\\; 1/P_\\zeta),\\; P_\\zeta = 1/v_\\zeta + \\sum_i \\sigma_i^{-2}", "posterior of speed at each node"),
       L(
@@ -669,7 +675,11 @@ al_em <- function(C, object) {
     ll_rt,
     L("\\pi_{jq}", "=", "\\exp \\ell_{jq}/\\sum_{q'} \\exp \\ell_{jq'}", "calc_node_weights()"),
     if (rt) speed[[1]], if (rt) speed[[2]],
-    L("\\text{moments}", "", if (rt) "E[\\theta_j],\\; E[\\theta_j^2],\\; E[\\zeta_j],\\; E[\\zeta_j^2],\\; E[\\theta_j\\zeta_j]" else "E[\\theta_j],\\; E[\\theta_j^2]", "sums over the nodes with weights pi_jq")
+    if (C$qr) {
+      L("\\text{moments}", "", "E[\\theta_j]", "sums over the nodes with weights pi_jq; speed integrated in L_jq")
+    } else {
+      L("\\text{moments}", "", if (rt) "E[\\theta_j],\\; E[\\theta_j^2],\\; E[\\zeta_j],\\; E[\\zeta_j^2],\\; E[\\theta_j\\zeta_j]" else "E[\\theta_j],\\; E[\\theta_j^2]", "sums over the nodes with weights pi_jq")
+    }
   )
   pa <- pr$a
   pb <- pr$b
@@ -744,11 +754,29 @@ al_em <- function(C, object) {
     ),
     cross = if (!C$fixed) al_sec("M-step: speed variance", L("s", "=", "\\sum_j E[\\zeta_j^2]/N"))
   )
+  if (C$qr) {
+    phi <- if (eng == "cross") {
+      sprintf("(\\lambda, \\sigma, \\rho%s)", if (C$fixed) "" else ", s")
+    } else {
+      sprintf("(\\lambda, \\sigma^2, %s\\gamma, s)", if (P) "\\beta, " else "")
+    }
+    rtm <- al_sec(
+      "CM-step: response-time and structural parameters",
+      L(phi, "=", "\\arg\\max \\sum_j\\sum_q \\pi_{jq} L_{jq}", "nlminb() with the analytic gradient: posterior expectations of speed (Fisher identity); the weights pi_jq fixed"),
+      if (eng == "cross") L("\\sigma_i,\\; s", "", "\\text{ALD scales of the log times; variance of speed}", "sigma2t holds the ALD scale"),
+      if (eng == "latent") L("s", "", "\\text{ALD scale of speed}")
+    )
+    st <- NULL
+  }
   conv <- al_sec(
     "Acceleration, convergence and standard errors",
     L("\\text{SQUAREM}", "", "x \\leftarrow x - 2\\alpha d_1 + \\alpha^2 d_2,\\; \\alpha = \\min(-\\|d_1\\|/\\|d_2\\|,\\; -1)", "em_squarem(): SqS3 (Varadhan & Roland, 2008); a plain EM step when it would lower the log-likelihood"),
     L("\\text{stop}", "", "|\\Delta\\ell| \\le 10^{-10}|\\ell| \\text{ and } \\max|\\Delta x| \\le 10^{-5}", "x: log a, b, lambda, log sigma2, ... (unconstrained)"),
-    L("\\mathrm{SE}", "", "\\mathrm{diag}(-H^{-1})^{1/2},\\; H = \\partial s(x)/\\partial x", "calc_hessian(): central differences of the analytic score s (Fisher identity), then the delta method")
+    if (C$qr) {
+      L("\\mathrm{SE}", "", "\\mathrm{diag}(H^{-1}JH^{-1})^{1/2},\\; J = \\sum_j s_j s_j^\\top", "sandwich: the ALD is a working likelihood; s_j the score of person j, H its total's Jacobian, then the delta method")
+    } else {
+      L("\\mathrm{SE}", "", "\\mathrm{diag}(-H^{-1})^{1/2},\\; H = \\partial s(x)/\\partial x", "calc_hessian(): central differences of the analytic score s (Fisher identity), then the delta method")
+    }
   )
   list(head, estep, items, rtm, st, conv)
 }

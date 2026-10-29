@@ -23,7 +23,22 @@
 #' The item step uses the Polya-Gamma bound of the logistic likelihood (Polson, Scott &
 #' Windle, 2013), so every step is closed form and the log-likelihood never decreases;
 #' SQUAREM speeds up convergence. Standard errors come from the observed information (the
-#' numerical derivative of the analytic score). Quantile (ALD) models use [gibbs()].
+#' numerical derivative of the analytic score).
+#'
+#' **Quantile models.** With `quantile =` (models `"latent"` and `"cross"`, as in [gibbs()])
+#' `ecm()` maximizes the marginal ALD working likelihood (Yu & Moyeed, 2001): the q-quantile of
+#' the log times (`"cross"`) or of speed given ability and the covariates (`"latent"`) is linear
+#' in the parameters. Ability is integrated on the nodes and speed in closed form, so the
+#' working log-likelihood is smooth. The E-step and the item step are those of the normal models;
+#' the response-time and structural parameters are updated by `nlminb()` with the analytic
+#' gradient (two iterations per ECM step, which never lowers the working log-likelihood). The
+#' fit starts at the ECM fit of the mean model, moved to the q-quantile. The standard errors are
+#' sandwich (robust) standard errors, \eqn{H^{-1} J H^{-1}}{H^-1 J H^-1} with \eqn{J}{J} the
+#' sum of the outer products of the scores of the persons: the ALD is not the distribution of the
+#' data, so the observed information alone would be wrong. As in [gibbs()], `sigma2t` of
+#' `"cross"` is the ALD scale of the log times and `var_speed` of `"latent"` the ALD scale of
+#' speed. The working logLik, AIC and BIC compare only fits at the same quantile; [anova()]
+#' refuses quantile fits. A vector of levels gives one fit per level (an `rtirt_qset`).
 #'
 #' The parameterization and identification are those of [gibbs()]: ability has mean
 #' `x'beta` and variance 1, speed mean `x'beta` (no intercepts: the covariates are centred and
@@ -55,6 +70,8 @@
 #'   item (all equal for now).
 #' @param speed_var `"free"` (default) or `"fixed"` (variance of speed 1; `"null"`,
 #'   `"latreg"`, `"cross"`).
+#' @param quantile `NULL` (the normal model), or one or more quantile levels in (0, 1) for
+#'   `"latent"` and `"cross"` (see Quantile models).
 #' @param cov Names of the covariates of `data` to use (default all); models without
 #'   covariates ignore them.
 #' @param prior `"ml"` (maximum likelihood) or `"map"`: `"map"` adds the item priors of
@@ -79,6 +96,12 @@
 #'   Polson, N. G., Scott, J. G., & Windle, J. (2013). Bayesian inference for logistic models
 #'   using Polya-Gamma latent variables. *JASA*, 108, 1339-1349.
 #'
+#'   White, H. (1982). Maximum likelihood estimation of misspecified models. *Econometrica*,
+#'   50, 1-25.
+#'
+#'   Yu, K., & Moyeed, R. A. (2001). Bayesian quantile regression. *Statistics & Probability
+#'   Letters*, 54, 437-447.
+#'
 #'   Varadhan, R., & Roland, C. (2008). Simple and globally convergent methods for
 #'   accelerating the convergence of any EM algorithm. *Scandinavian Journal of Statistics*,
 #'   35, 335-353.
@@ -88,6 +111,8 @@
 #' fit <- ecm(dat, model = "cross")
 #' fit
 #' head(estimates(fit))
+#' fit_q <- ecm(dat, model = "cross", quantile = 0.9) # the 0.9-quantile of the log times
+#' estimates(fit_q, pars = "^rho")
 #' @export
 ecm <- function(data, ...) UseMethod("ecm")
 
@@ -97,7 +122,10 @@ ecm.default <- function(data, ...) {
 }
 
 #' @export
-ecm.rtirt_qset <- function(data, ...) stop("ecm() fits the normal models; quantile models use gibbs()", call. = FALSE)
+ecm.rtirt_qset <- function(data, ...) {
+  data$models <- lapply(data$models, ecm.rtirt, ...)
+  data
+}
 
 #' Fit a model object by ECM (deprecated)
 #'
@@ -120,10 +148,13 @@ ecm.rtirt <- function(data, max_iter = 1000, tol = 1e-10, nodes = 41, se = TRUE,
   model <- data
   refuse_fit_as_data("ecm", model, names(list(...)))
   if (length(list(...))) warning("unused arguments: ", paste(names(list(...)), collapse = ", "), call. = FALSE)
-  if (isTRUE(model$qr)) stop("ecm() fits the normal models; quantile models use gibbs()", call. = FALSE)
   t0 <- Sys.time()
   Q <- nodes
   map <- match.arg(prior) == "map"
+  if (isTRUE(model$qr)) {
+    if (map) stop("prior = \"map\" is for the normal models; quantile models are fitted by maximum (working) likelihood", call. = FALSE)
+    return(em_qr_fit(model, max_iter, tol, Q, se, accelerate, verbose, t0))
+  }
   priors <- priors %||% rtirt_priors()
   if (!inherits(priors, "rtirt_priors")) stop("priors must come from rtirt_priors()", call. = FALSE)
   E <- em_setup(model, Q, map, priors)
@@ -661,7 +692,12 @@ em_inits <- function(model, engine, X, fixed) {
 # check_ecm() for a built-in model, with the E- and M-step of ecm(): one M-step never lowers the objective,
 # Fisher's identity (em_score() = numerical gradient of the objective), and the fit is a maximum
 em_check_builtin <- function(model, prior, nodes, n_start, add) {
-  if (inherits(model, "rtirt_qset") || isTRUE(model$qr)) stop("check_ecm(): quantile models have no EM; check their sampler with check_sampler()", call. = FALSE)
+  if (inherits(model, "rtirt_qset")) {
+    stop("check_ecm() checks one model: check one quantile level, e.g. check_ecm(fits$models[[1]])", call. = FALSE)
+  }
+  if (isTRUE(model$qr)) {
+    return(em_qr_check(model, nodes, n_start, add))
+  }
   Q <- nodes %||% 41
   E <- em_setup(model, Q, prior == "map")
   obj <- function(x) {
@@ -702,12 +738,24 @@ need_em <- function(x) if (is.null(x$ecm)) stop("run ecm() first", call. = FALSE
 
 print_em <- function(x) {
   f <- x$ecm
+  quantile <- isTRUE(x$qr)
+  objective <- if (f$map) {
+    "marginal posterior mode (item priors of gibbs())"
+  } else if (quantile) {
+    "maximum marginal ALD working likelihood"
+  } else {
+    "maximum marginal likelihood"
+  }
   cat(sprintf(
     "  %s (ECM, %d Gauss-Hermite nodes): %d iterations%s, %.1f s\n",
-    if (f$map) "marginal posterior mode (item priors of gibbs())" else "maximum marginal likelihood", f$nodes, f$iterations,
+    objective, f$nodes, f$iterations,
     if (f$converged) "" else " (not converged)", f$secs
   ))
-  if (f$map) {
+  if (quantile) {
+    cat(sprintf("  working logLik %s, npar %d, AIC %s, BIC %s (compare only fits at the same quantile)\n",
+                fmt_fixed(f$logLik), f$npar, fmt_fixed(f$AIC), fmt_fixed(f$BIC)))
+    if (!is.null(f$vcov)) cat("  Standard errors: sandwich (robust to the ALD being a working likelihood)\n")
+  } else if (f$map) {
     cat(sprintf("  log posterior %s, npar %d (no AIC / BIC: the objective includes the priors)\n", fmt_fixed(f$logLik), f$npar))
   } else {
     cat(sprintf("  logLik %s, npar %d, AIC %s, BIC %s\n", fmt_fixed(f$logLik), f$npar, fmt_fixed(f$AIC), fmt_fixed(f$BIC)))
@@ -798,6 +846,11 @@ anova.rtirt <- function(object, ...) {
          call. = FALSE)
   }
   check_same_data(fits, labels)
+  quantile_fit <- vapply(fits, function(f) isTRUE(f$qr), TRUE)
+  if (any(quantile_fit)) {
+    stop(sprintf("%s: quantile fits have an ALD working likelihood, not comparable with other fits", paste(labels[quantile_fit], collapse = ", ")),
+         call. = FALSE)
+  }
   if (all(is_ecm)) {
     order_npar <- order(vapply(fits, function(f) as.numeric(f$ecm$npar), 0))
     fits <- fits[order_npar]
@@ -880,11 +933,6 @@ print.rtirt_anova <- function(x, digits = 3, signif.stars = getOption("show.sign
 }
 
 anova_gibbs <- function(fits, labels, heading_models) {
-  quantile_fit <- vapply(fits, function(f) isTRUE(f$qr), TRUE)
-  if (any(quantile_fit)) {
-    stop(sprintf("%s: quantile fits have an ALD working likelihood, not comparable with other fits", paste(labels[quantile_fit], collapse = ", ")),
-         call. = FALSE)
-  }
   indices <- lapply(fits, function(f) fit_indices(f))
   get <- function(name) vapply(indices, function(x) as.numeric(x[[name]]), 0)
   table <- data.frame(DIC = get("DIC"), pD = get("pD"), WAIC = get("WAIC"), LOOIC = get("LOOIC"), SE_LOOIC = get("SE_LOOIC"),
@@ -907,15 +955,27 @@ summary_em <- function(object, digits) {
     item <- grepl("^(a|b|lambda|sigma2t)\\[", e$parameter)
     e$prior <- ifelse(item, unname(pr[e$parameter]), "(ML)")
   }
-  p <- rtirt_partable(e, FALSE, FALSE, sprintf(
-    "%s, SE, Wald z and 95%% interval (log scale for a, sigma2t, var_speed; Fisher-z for the correlation)",
-    if (isTRUE(object$ecm$map)) "posterior mode under the item priors" else "ML estimate"
+  quantile <- isTRUE(object$qr)
+  estimate <- if (isTRUE(object$ecm$map)) {
+    "posterior mode under the item priors"
+  } else if (quantile) {
+    "ALD working-likelihood estimate"
+  } else {
+    "ML estimate"
+  }
+  p <- rtirt_partable(e, FALSE, quantile && class(object)[1] == "rtirt_cross", sprintf(
+    "%s, %sSE, Wald z and 95%% interval (log scale for a, sigma2t, var_speed; Fisher-z for the correlation)",
+    estimate, if (quantile) "sandwich " else ""
   ))
   w <- rtirt_item_wide(p, object$data$items)
   structure(
     list(
       header = c(rtirt_header(object), ecm_extreme_warning(object)),
-      fit = rtable(fit_indices(object), "marginal likelihood (persons integrated out)"),
+      fit = rtable(fit_indices(object), if (isTRUE(object$qr)) {
+        "marginal ALD working likelihood (persons integrated out; compare only fits at the same quantile)"
+      } else {
+        "marginal likelihood (persons integrated out)"
+      }),
       items = rtable(w$est, "item parameters (ECM estimates)"),
       se = rtable(w$se, "standard errors of the item parameters"),
       parameters = p,

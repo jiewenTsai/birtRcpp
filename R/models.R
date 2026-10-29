@@ -203,8 +203,9 @@ rtirt_cross <- function(data, quantile = NULL, speed_var = c("free", "fixed"), i
 #' @param init `"random"` (default): each chain draws its own starting values; an [ecm()]
 #'   fit of the same data and model: start the chains at its estimates and EAP scores, which
 #'   shortens the burn-in; `"ecm"`: run [ecm()] first and start there. If the fit is of other
-#'   data, another model or other settings, the error says what differs. Quantile models start
-#'   from random values.
+#'   data, another model or other settings, the error says what differs. A quantile model starts
+#'   at an [ecm()] fit at the same quantile; several levels take `init = "ecm"` (an ECM fit per
+#'   level).
 #' @param control Further sampler settings, from [gibbs_control()], e.g.
 #'   `gibbs(dat, model = "cross", control = gibbs_control(n_burnin = 500))`.
 #' @param ... Not used: any other argument is an error before sampling starts. A setting of
@@ -412,9 +413,6 @@ sampler_design <- function(model, info, settings, collapse) {
 
 # init = "ecm": an ECM fit of the same model (an intercept column starts at 0)
 ecm_start <- function(model, settings) {
-  if (model$qr) {
-    stop("init = \"ecm\" needs a normal model; quantile models start from random values", call. = FALSE)
-  }
   key <- c("speed_var", "itemtype")
   if (is.null(model$ecm) || !identical(model$ecm$settings[key], settings[key])) {
     model_ecm <- model

@@ -854,11 +854,14 @@ print.block_model_ecm <- function(x, ...) {
 #' 3. **ECM stops at a maximum** (a general optimizer started at the ECM estimate finds nothing better,
 #'    and the gradient is zero there).
 #'
-#' For an [ecm()] fit of a built-in model (any model but the quantile ones; a [gibbs()] fit or a
+#' For an [ecm()] fit of a built-in model (a [gibbs()] fit or a
 #' model object of the deprecated constructors also works) the three are checked for
 #' the EM of [ecm()] with its own E- and M-step, from `n_start` starting values jittered around those
 #' of [ecm()]: one whole M-step (which updates all blocks) never lowers the objective, the analytic
 #' score (Fisher's identity) equals the numerical gradient of the objective, and the fit is a maximum.
+#' For a quantile model (one level, e.g. `check_ecm(ecm(dat, model = "cross", quantile = 0.9))`)
+#' the objective is the ALD working log-likelihood, the starts are jittered around the fit, and
+#' `prior` is not used.
 #' For an EM written by hand, give `data`, `init`, `step` and `loglik` as for [run_em()]; checks 1
 #' (from `n_start` jittered starts) and 3 are done. For a [block_model()] (deprecated) all three are
 #' checked, with starting values drawn from the declared priors.

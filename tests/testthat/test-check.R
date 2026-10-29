@@ -81,5 +81,14 @@ test_that("check_ecm() checks the EM of ecm() for every built-in normal model an
     r <- check_ecm(m, prior = "ml", n_start = 2, seed = 1)
     expect_false(r$passed[grepl("Fisher", r$check)])
   })
-  expect_error(check_ecm(rtirt_cross(sim_data(cond, sim_para(cond, "cross"), "cross"), quantile = 0.3)), "quantile models")
+  # quantile models: the ALD working log-likelihood, and a wrong score is caught there too
+  mq <- rtirt_cross(sim_data(cond, sim_para(cond, "cross"), "cross"), quantile = 0.3)
+  expect_true(all(check_ecm(mq, n_start = 2, seed = 1)$passed))
+  sq <- em_qr_score
+  local({
+    local_mocked_bindings(em_qr_score = function(x, E) { s <- sq(x, E); s[1] <- 1.05 * s[1]; s })
+    r <- check_ecm(mq, n_start = 2, seed = 1)
+    expect_false(r$passed[grepl("analytic score", r$check)])
+  })
+  expect_error(check_ecm(rtirt_cross(sim_data(cond, sim_para(cond, "cross"), "cross"), quantile = c(0.3, 0.6))), "check one quantile level")
 })

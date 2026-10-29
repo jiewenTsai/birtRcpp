@@ -1,5 +1,6 @@
 # Example 3. Quantile models: one model per quantile level (ALD working likelihood).
-# Gibbs only: ecm() fits the normal (mean) models, which serve as the reference.
+# gibbs() samples them; ecm() fits them by maximum working likelihood (sandwich standard errors) and fits the
+# normal (mean) model, the reference.
 library(birtRcpp)
 set.seed(3)
 cond <- set_cond(n_subj = 500, n_item = 8, n_feat = 2)
@@ -12,6 +13,9 @@ qs # one line per quantile level
 # a second speed factor (a about 0.15, |rho| about 0.55 with item-specific signs) and each chain settles on its own
 # sign pattern, about equally likely; chains started at the ECM fit of the normal model do the same. Not a sampler
 # fault: check convergence() and do not read the extreme levels (rho above all) on skewed data.
+# the same levels by ECM: maximum working likelihood, sandwich standard errors, a few seconds per level
+qe <- ecm(d_cross, model = "cross", quantile = q_levels)
+qe
 coefs <- coef(qs)
 rho_q <- coefs[grepl("^rho", rownames(coefs)), ] # rho_i(q): items x quantiles
 rho_mean <- estimates(mean_fit, pars = "^rho")$est

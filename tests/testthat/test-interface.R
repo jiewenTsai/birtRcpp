@@ -94,10 +94,12 @@ test_that("gibbs() starts from an ecm() fit of the same data and model only", {
   expect_error(gibbs(other, model = "cross", init = fit_ecm, n_iter = 60), "init was fitted to other responses")
   fewer <- input_data(dat$Y[1:100, ], dat$T[1:100, ])
   expect_error(gibbs(fewer, model = "cross", init = fit_ecm, n_iter = 60), "init was fitted to 150 persons x 5 items, gibbs\\(\\) has 100 x 5")
-  # init with quantile models, init as text, and a fit given as the data
+  # init with quantile models (a fit of the mean model, a fit for several levels), init as text,
+  # and a fit given as the data
   expect_error(gibbs(dat, model = "cross", quantile = 0.5, init = fit_ecm, n_iter = 60),
-               "quantile models \\(quantile = 0.5\\) start from random values: drop init")
-  expect_error(gibbs(dat, model = "cross", quantile = c(0.2, 0.8), init = "ecm", n_iter = 60), "drop init")
+               "init was fitted with the mean model, gibbs\\(\\) was asked for quantile = 0.5.*init = ecm\\(data, model = \"cross\", quantile = 0.5\\)")
+  expect_error(gibbs(dat, model = "cross", quantile = c(0.2, 0.8), init = fit_ecm, n_iter = 60),
+               "starts one model; for the quantiles 0.2, 0.8 use init = \"ecm\"")
   expect_error(gibbs(dat, model = "cross", init = TRUE, n_iter = 60), "init must be \"random\", \"ecm\" or an ecm\\(\\) fit.*not TRUE")
   fit_upper <- gibbs(dat, model = "cross", init = "ECM", n_iter = 60, n_chain = 1, seed = 1,
                      control = gibbs_control(verbose = FALSE, fit_indices = FALSE))
@@ -156,9 +158,10 @@ test_that("equations() and algorithm() of data and a model name match the old co
   expect_error(equations(dat), "model")
 })
 
-test_that("ecm() refuses quantile models", {
+test_that("ecm() fits quantile models only where gibbs() has them", {
   dat <- small_data()
-  expect_error(ecm(dat, model = "cross", quantile = 0.9), "quantile models use gibbs")
+  expect_error(ecm(dat, model = "null", quantile = 0.9), "quantile = is available for model = \"latent\" or \"cross\" only")
+  expect_error(ecm(dat, model = "cross", quantile = 1.2), "quantile must be NULL \\(mean model\\) or a level in \\(0, 1\\)")
 })
 
 test_that("unknown arguments of ecm() and gibbs() are errors that show the right call", {

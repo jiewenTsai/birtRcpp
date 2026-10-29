@@ -12,6 +12,7 @@ ecm(data, ...)
   model = NULL,
   itemtype = "2pl",
   speed_var = c("free", "fixed"),
+  quantile = NULL,
   cov = NULL,
   prior = c("ml", "map"),
   priors = NULL,
@@ -45,6 +46,9 @@ item (all equal for now).}
 \item{speed_var}{\code{"free"} (default) or \code{"fixed"} (variance of speed 1; \code{"null"},
 \code{"latreg"}, \code{"cross"}).}
 
+\item{quantile}{\code{NULL} (the normal model), or one or more quantile levels in (0, 1) for
+\code{"latent"} and \code{"cross"} (see Quantile models).}
+
 \item{cov}{Names of the covariates of \code{data} to use (default all); models without
 covariates ignore them.}
 
@@ -73,9 +77,24 @@ Aitkin (1981) with ability integrated by Gauss-Hermite quadrature and speed in c
 The item step uses the Polya-Gamma bound of the logistic likelihood (Polson, Scott &
 Windle, 2013), so every step is closed form and the log-likelihood never decreases;
 SQUAREM speeds up convergence. Standard errors come from the observed information (the
-numerical derivative of the analytic score). Quantile (ALD) models use \code{\link[=gibbs]{gibbs()}}.
+numerical derivative of the analytic score).
 }
 \details{
+\strong{Quantile models.} With \verb{quantile =} (models \code{"latent"} and \code{"cross"}, as in \code{\link[=gibbs]{gibbs()}})
+\code{ecm()} maximizes the marginal ALD working likelihood (Yu & Moyeed, 2001): the q-quantile of
+the log times (\code{"cross"}) or of speed given ability and the covariates (\code{"latent"}) is linear
+in the parameters. Ability is integrated on the nodes and speed in closed form, so the
+working log-likelihood is smooth. The E-step and the item step are those of the normal models;
+the response-time and structural parameters are updated by \code{nlminb()} with the analytic
+gradient (two iterations per ECM step, which never lowers the working log-likelihood). The
+fit starts at the ECM fit of the mean model, moved to the q-quantile. The standard errors are
+sandwich (robust) standard errors, \eqn{H^{-1} J H^{-1}}{H^-1 J H^-1} with \eqn{J}{J} the
+sum of the outer products of the scores of the persons: the ALD is not the distribution of the
+data, so the observed information alone would be wrong. As in \code{\link[=gibbs]{gibbs()}}, \code{sigma2t} of
+\code{"cross"} is the ALD scale of the log times and \code{var_speed} of \code{"latent"} the ALD scale of
+speed. The working logLik, AIC and BIC compare only fits at the same quantile; \code{\link[=anova]{anova()}}
+refuses quantile fits. A vector of levels gives one fit per level (an \code{rtirt_qset}).
+
 The parameterization and identification are those of \code{\link[=gibbs]{gibbs()}}: ability has mean
 \verb{x'beta} and variance 1, speed mean \verb{x'beta} (no intercepts: the covariates are centred and
 the item parameters carry the location). The fit starts the Gibbs sampler:
@@ -97,6 +116,8 @@ dat <- sim_data(cond, sim_para(cond, "cross"), "cross")
 fit <- ecm(dat, model = "cross")
 fit
 head(estimates(fit))
+fit_q <- ecm(dat, model = "cross", quantile = 0.9) # the 0.9-quantile of the log times
+estimates(fit_q, pars = "^rho")
 }
 \references{
 Bock, R. D., & Aitkin, M. (1981). Marginal maximum likelihood estimation of
@@ -104,6 +125,12 @@ item parameters: Application of an EM algorithm. \emph{Psychometrika}, 46, 443-4
 
 Polson, N. G., Scott, J. G., & Windle, J. (2013). Bayesian inference for logistic models
 using Polya-Gamma latent variables. \emph{JASA}, 108, 1339-1349.
+
+White, H. (1982). Maximum likelihood estimation of misspecified models. \emph{Econometrica},
+50, 1-25.
+
+Yu, K., & Moyeed, R. A. (2001). Bayesian quantile regression. \emph{Statistics & Probability
+Letters}, 54, 437-447.
 
 Varadhan, R., & Roland, C. (2008). Simple and globally convergent methods for
 accelerating the convergence of any EM algorithm. \emph{Scandinavian Journal of Statistics},

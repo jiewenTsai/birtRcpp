@@ -108,10 +108,19 @@ estimates(g, pars = "beta|b_ability") # posterior mean, SD, 95% interval, R-hat,
 convergence(g)
 ```
 
-## Quantile models (Gibbs only)
+## Quantile models
 
-Quantile models use the asymmetric Laplace working likelihood, so `ecm()` refuses them.
-For several quantile levels, give a vector; the result holds one model per level:
+Quantile models use the asymmetric Laplace (ALD) working likelihood: the estimates describe a
+quantile of the log times (`"cross"`) or of speed (`"latent"`), not a model of the whole
+distribution. `ecm()` maximizes the working likelihood and gives sandwich standard errors:
+
+```{r}
+fit_q <- ecm(dat, model = "latent", quantile = 0.25)
+estimates(fit_q, pars = "beta|b_ability")
+```
+
+`gibbs()` samples the same model. For several quantile levels, give a vector; the result holds one
+model per level:
 
 ```{r}
 qs <- gibbs(dat,

@@ -32,11 +32,14 @@
 }
 \description{
 \code{fits <- gibbs(data, model = "cross", quantile = c(.1, .5, .9))} (or \code{model = "latent"})
-samples one ALD model per level and returns them as an \code{rtirt_qset}. \code{coef()} gives a parameters x
+samples one ALD model per level and returns them as an \code{rtirt_qset};
+\code{ecm(data, model = "cross", quantile = c(.1, .5, .9))} fits them by maximum (working)
+likelihood. \code{coef()} gives a parameters x
 levels matrix, \code{estimates()} stacks the tables with a column \code{q}, and \code{plot()} draws the
 quantile coefficients (cross-relations \code{rho}, or the regression coefficients of
-\code{"latent"}) against the level with 95\% intervals. \code{\link[=convergence]{convergence()}} checks every level.
+\code{"latent"}) against the level with 95\% intervals (posterior intervals, or Wald intervals from
+the sandwich standard errors of \code{\link[=ecm]{ecm()}}). \code{\link[=convergence]{convergence()}} checks every level.
 \code{summary()} returns an object that prints as \code{print()}.
 The fit of one level is \code{fits$models[[k]]} (an ordinary fit: \code{summary()}, \code{estimates()},
-\code{plot(type = "trace")}).
+\code{plot(type = "trace")} for a sampled fit).
 }

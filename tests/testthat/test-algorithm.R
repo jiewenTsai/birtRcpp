@@ -14,7 +14,8 @@ test_that("algorithm() writes every sampler and the EM steps in Unicode and LaTe
     expect_equal(any(grepl("draw_items_joint", u)), co && !identical(m$settings$itemtype, "1pl"))
     l <- as.character(algorithm(m, collapse = co, format = "latex"))
     expect_equal(l[c(1, length(l))], c("\\begin{aligned}", "\\end{aligned}"))
-    if (!isTRUE(m$qr)) expect_true(any(grepl("SQUAREM", as.character(algorithm(m, method = "ecm")))))
+    expect_true(any(grepl("SQUAREM", as.character(algorithm(m, method = "ecm")))))
+    if (isTRUE(m$qr)) expect_true(any(grepl("sandwich", as.character(algorithm(m, method = "ecm")))))
   }
   u <- as.character(algorithm(rtirt_cross(d)))
   expect_true(any(grepl("Cross-relation move", u))); expect_true(any(grepl("Huang & Wand", u)))
@@ -23,7 +24,7 @@ test_that("algorithm() writes every sampler and the EM steps in Unicode and LaTe
   expect_true(any(grepl("collapse = TRUE", as.character(algorithm(gibbs(rtirt_null(d), n_iter = 20, n_chain = 1, verbose = FALSE,
     fit_indices = FALSE, collapse = TRUE))), fixed = TRUE)))
   expect_true(any(grepl("E-step", as.character(algorithm(ecm(rtirt_null(d), se = FALSE))))))
-  expect_error(algorithm(rtirt_cross(d, quantile = 0.5), method = "ecm"), "quantile")
+  expect_true(any(grepl("ALD at q = 0.5", as.character(algorithm(rtirt_cross(d, quantile = 0.5), method = "ecm")), fixed = TRUE)))
   expect_s3_class(algorithm(rtirt_cross(d, quantile = c(0.2, 0.8))), "rtirt_algorithm")
 })
 

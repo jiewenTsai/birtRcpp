@@ -42,7 +42,7 @@ test_that("EM recovers the parameters and gives standard errors", {
   s <- summary(f); expect_output(print(s), "Structural:"); expect_true(all(c("z", "pvalue") %in% names(as.data.frame(s))))
 })
 
-test_that("EM options: fixed speed variance, 1PL, item priors; quantile models refused", {
+test_that("EM options: fixed speed variance, 1PL, item priors; quantile models by the deprecated interface", {
   set.seed(13)
   f <- ecm(fit_em("latreg", speed_var = "fixed"), se = FALSE)
   e <- estimates(f); expect_equal(e$est[e$parameter == "var_speed"], 1)
@@ -50,8 +50,10 @@ test_that("EM options: fixed speed variance, 1PL, item priors; quantile models r
   e <- estimates(f); expect_true(all(e$est[startsWith(e$parameter, "a[")] == 1)); expect_true(all(is.na(e$se[startsWith(e$parameter, "a[")])))
   m <- fit_em("cross", n = 150); fm <- ecm(m, prior = "map", se = FALSE); fl <- ecm(m, se = FALSE)
   expect_lt(fm$ecm$logLik, fl$ecm$logLik + 1e-8)                # MAP is not the likelihood maximum
-  expect_error(ecm(fit_em("cross", quantile = 0.3)), "quantile models use gibbs")
-  expect_error(ecm(fit_em("latent", quantile = c(0.3, 0.5))), "quantile models use gibbs")
+  expect_error(ecm(fit_em("cross", quantile = 0.3), prior = "map"), "quantile models are fitted by maximum \\(working\\) likelihood")
+  qs <- suppressWarnings(ecm(fit_em("latent", n = 150, k = 4, quantile = c(0.3, 0.5)), se = FALSE))
+  expect_s3_class(qs, "rtirt_qset")
+  expect_true(all(vapply(qs$models, function(m) m$ecm$converged, TRUE)))
 })
 
 test_that("Gibbs chains can start from the ECM fit", {

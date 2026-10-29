@@ -604,7 +604,7 @@ convergence.rtirt <- function(object, ess = 400, rhat = NULL, diagnostics = c("c
 #' @export
 convergence.rtirt_qset <- function(object, ...) {
   if (!qset_sampled(object)) {
-    stop("run gibbs() first", call. = FALSE)
+    stop("run gibbs() or ecm() first", call. = FALSE)
   }
   levels <- lapply(object$models, convergence, ...)
   structure(list(levels = levels, quantile = object$quantile), class = "rtirt_convergence")
@@ -785,13 +785,16 @@ plot_traces <- function(x, selected, ...) {
 #' Several quantile levels
 #'
 #' `fits <- gibbs(data, model = "cross", quantile = c(.1, .5, .9))` (or `model = "latent"`)
-#' samples one ALD model per level and returns them as an `rtirt_qset`. `coef()` gives a parameters x
+#' samples one ALD model per level and returns them as an `rtirt_qset`;
+#' `ecm(data, model = "cross", quantile = c(.1, .5, .9))` fits them by maximum (working)
+#' likelihood. `coef()` gives a parameters x
 #' levels matrix, `estimates()` stacks the tables with a column `q`, and `plot()` draws the
 #' quantile coefficients (cross-relations `rho`, or the regression coefficients of
-#' `"latent"`) against the level with 95% intervals. [convergence()] checks every level.
+#' `"latent"`) against the level with 95% intervals (posterior intervals, or Wald intervals from
+#' the sandwich standard errors of [ecm()]). [convergence()] checks every level.
 #' `summary()` returns an object that prints as `print()`.
 #' The fit of one level is `fits$models[[k]]` (an ordinary fit: `summary()`, `estimates()`,
-#' `plot(type = "trace")`).
+#' `plot(type = "trace")` for a sampled fit).
 #' @param x,object An `rtirt_qset`.
 #' @param pars Regular expression of the parameters to plot (default: `rho` for
 #'   `"cross"`, `beta` and `b_ability` for `"latent"`).
@@ -799,8 +802,9 @@ plot_traces <- function(x, selected, ...) {
 #' @name rtirt_qset
 NULL
 
+# every level sampled by gibbs() or fitted by ecm()
 qset_sampled <- function(x) {
-  all(vapply(x$models, function(m) !is.null(m$post), TRUE))
+  all(vapply(x$models, function(m) !is.null(m$post) || has_em(m), TRUE))
 }
 
 #' @rdname rtirt_qset
@@ -808,7 +812,7 @@ qset_sampled <- function(x) {
 print.rtirt_qset <- function(x, ...) {
   cat(sprintf("%s (%s) at quantiles %s\n", model_call_text(x$type), x$type, paste(format(x$quantile), collapse = ", ")))
   if (!qset_sampled(x)) {
-    cat("  not sampled yet: fits <- gibbs(models)\n")
+    cat("  not fitted yet: gibbs(data, model = ..., quantile = ) or ecm(data, model = ..., quantile = )\n")
     return(invisible(x))
   }
   coefs <- unclass(stats::coef(x))
@@ -816,7 +820,12 @@ print.rtirt_qset <- function(x, ...) {
   key <- grepl(key_pattern, rownames(coefs))
   print_table(data.frame(parameter = rownames(coefs)[key], coefs[key, , drop = FALSE], check.names = FALSE))
   for (k in seq_along(x$models)) {
-    convergence_warn(x$models[[k]], sprintf("q = %s", format(x$quantile[k])))
+    level <- sprintf("q = %s", format(x$quantile[k]))
+    if (has_em(x$models[[k]])) {
+      if (!x$models[[k]]$ecm$converged) cat(sprintf("  Warning (%s): ecm() did not converge; see convergence()\n", level))
+    } else {
+      convergence_warn(x$models[[k]], level)
+    }
   }
   invisible(x)
 }
@@ -854,7 +863,7 @@ print.summary.rtirt_qset <- function(x, ...) {
 #' @export
 plot.rtirt_qset <- function(x, pars = NULL, ...) {
   if (!qset_sampled(x)) {
-    stop("run gibbs() first", call. = FALSE)
+    stop("run gibbs() or ecm() first", call. = FALSE)
   }
   pars <- pars %||% if (x$type == "rtirt_cross") "^rho\\[" else "^(beta|b_ability)"
   table <- estimates(x)

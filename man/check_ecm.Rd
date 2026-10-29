@@ -58,11 +58,14 @@ at \eqn{x}{x}); and
 and the gradient is zero there).
 }
 
-For an \code{\link[=ecm]{ecm()}} fit of a built-in model (any model but the quantile ones; a \code{\link[=gibbs]{gibbs()}} fit or a
+For an \code{\link[=ecm]{ecm()}} fit of a built-in model (a \code{\link[=gibbs]{gibbs()}} fit or a
 model object of the deprecated constructors also works) the three are checked for
 the EM of \code{\link[=ecm]{ecm()}} with its own E- and M-step, from \code{n_start} starting values jittered around those
 of \code{\link[=ecm]{ecm()}}: one whole M-step (which updates all blocks) never lowers the objective, the analytic
 score (Fisher's identity) equals the numerical gradient of the objective, and the fit is a maximum.
+For a quantile model (one level, e.g. \code{check_ecm(ecm(dat, model = "cross", quantile = 0.9))})
+the objective is the ALD working log-likelihood, the starts are jittered around the fit, and
+\code{prior} is not used.
 For an EM written by hand, give \code{data}, \code{init}, \code{step} and \code{loglik} as for \code{\link[=run_em]{run_em()}}; checks 1
 (from \code{n_start} jittered starts) and 3 are done. For a \code{\link[=block_model]{block_model()}} (deprecated) all three are
 checked, with starting values drawn from the declared priors.

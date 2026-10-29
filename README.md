@@ -223,7 +223,8 @@ sampler can be composed in R with the same functions (`?blocks`, `inst/examples/
 ### 3. Quantile response-time models
 
 `quantile =` replaces the mean of the log times by a quantile (asymmetric Laplace working
-likelihood; Gibbs only). A vector of levels fits one model per level.
+likelihood). A vector of levels fits one model per level, by `gibbs()` or by `ecm()` (maximum
+working likelihood with sandwich standard errors).
 
 ```r
 qs <- gibbs(dat, model = "cross", quantile = c(0.1, 0.5, 0.9), n_iter = 2000, n_chain = 2, seed = 2)
