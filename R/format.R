@@ -5,7 +5,8 @@
 # without decimals; p-values with 3 decimals and "<0.001" below 0.001; NA blank in tables. Only
 # the display is rounded: the objects keep full precision (x$est, coef(fit), as.data.frame(x)).
 # Run times keep one decimal and percentages of print() one decimal; the tolerances of
-# check_ecm() stay in scientific notation (1e-08 shown as 0.000 would say nothing).
+# check_ecm() stay in scientific notation (1e-08 shown as 0.000 would say nothing), and so do
+# numbers of 1e10 or more (5.950e+99, the upper bound of a diverging a, would be 100 digits).
 
 # columns of whole numbers (shown without decimals when every value is whole)
 count_columns <- c("n", "N", "npar", "Df", "df", "ess", "ess_tail", "nodes", "iterations", "cycles", "rep", "id",
@@ -15,9 +16,12 @@ count_columns <- c("n", "N", "npar", "Df", "df", "ess", "ess_tail", "nodes", "it
 # number of parameters) are not p-values
 pvalue_columns <- c("p.value", "p.holm", "pvalue", "Pr(>Chisq)", "p_chi_pf", "p_Lambda_s", "p_L_s")
 
-# x with `digits` decimals, no scientific notation, NA as `na`
+# x with `digits` decimals, no scientific notation below 1e10, NA as `na`
 fmt_fixed <- function(x, digits = 3, na = "") {
-  out <- formatC(as.numeric(x), format = "f", digits = digits)
+  x <- as.numeric(x)
+  out <- formatC(x, format = "f", digits = digits)
+  huge <- is.finite(x) & abs(x) >= 1e10
+  out[huge] <- formatC(x[huge], format = "e", digits = digits)
   out[is.na(x)] <- na
   out
 }
@@ -98,7 +102,8 @@ as_rtirt_tbl <- function(x) {
 #'
 #' The tables of [estimates()], [scores()], [fit_indices()], [compare_para()], [person_fit()],
 #' [preknowledge_test()], [dic()] and [run_simulation()] are tibbles (or data frames) of class
-#' `rtirt_tbl`. They print numbers with 3 decimals (counts without decimals, p-values below 0.001
+#' `rtirt_tbl`. They print numbers with 3 decimals (numbers of 1e10 or more, such as the bound of
+#' a diverging estimate, as e.g. `5.950e+99`; counts without decimals, p-values below 0.001
 #' as `<0.001`, `NA` blank), and all rows of a table with up to 40 rows (else the first 20). The
 #' values are not rounded: `x$est`, dplyr verbs and `as.data.frame(x)` have the full precision.
 #' Named vectors and matrices of numbers ([coef()][coef.rtirt], [reliability()],

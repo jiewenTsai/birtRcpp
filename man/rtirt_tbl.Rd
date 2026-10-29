@@ -28,7 +28,8 @@
 \description{
 The tables of \code{\link[=estimates]{estimates()}}, \code{\link[=scores]{scores()}}, \code{\link[=fit_indices]{fit_indices()}}, \code{\link[=compare_para]{compare_para()}}, \code{\link[=person_fit]{person_fit()}},
 \code{\link[=preknowledge_test]{preknowledge_test()}}, \code{\link[=dic]{dic()}} and \code{\link[=run_simulation]{run_simulation()}} are tibbles (or data frames) of class
-\code{rtirt_tbl}. They print numbers with 3 decimals (counts without decimals, p-values below 0.001
+\code{rtirt_tbl}. They print numbers with 3 decimals (numbers of 1e10 or more, such as the bound of
+a diverging estimate, as e.g. \code{5.950e+99}; counts without decimals, p-values below 0.001
 as \verb{<0.001}, \code{NA} blank), and all rows of a table with up to 40 rows (else the first 20). The
 values are not rounded: \code{x$est}, dplyr verbs and \code{as.data.frame(x)} have the full precision.
 Named vectors and matrices of numbers (\link[=coef.rtirt]{coef()}, \code{\link[=reliability]{reliability()}},

@@ -21,6 +21,8 @@ format_fit <- local({
 test_that("the formatting helpers follow the rules", {
   expect_identical(fmt_fixed(c(1.23456, -0.5, NA, 1234567.1)), c("1.235", "-0.500", "", "1234567.100"))
   expect_identical(fmt_fixed(1e-12), "0.000")                      # no scientific notation
+  expect_identical(fmt_fixed(c(9999999999, 5.95e99, -1.2e12)), # except 1e10 or more (a diverging bound)
+                   c("9999999999.000", "5.950e+99", "-1.200e+12"))
   expect_identical(fmt_p(c(0.5, 0.0004, 2.2e-16, NA)), c("0.500", "<0.001", "<0.001", ""))
   expect_identical(p_text(1e-20), "p < 0.001")
   expect_identical(p_text(0.0456), "p = 0.046")
