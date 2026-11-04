@@ -84,7 +84,10 @@ double rtnorm(double mu, double sd, double lo, double hi) {
 // ---- inverse Gaussian ---------------------------------------------------------------------------
 double rinvgauss(double mu, double lambda) {
   double y = R::norm_rand(); y *= y;
-  double x = mu + 0.5 * mu * mu * y / lambda - 0.5 * mu / lambda * std::sqrt(4.0 * mu * lambda * y + mu * mu * y * y);
+  // Michael, Schucany & Haas (1976), rationalized: mu (1 + z/2 - sqrt(z + z^2/4)) = mu / (1 + z/2 + sqrt(z + z^2/4)),
+  // z = mu y / lambda; the subtraction form cancels catastrophically when z is large (tiny ALD residuals)
+  double z = mu * y / lambda;
+  double x = mu / (1.0 + 0.5 * z + std::sqrt(z + 0.25 * z * z));
   return (R::unif_rand() <= mu / (mu + x)) ? x : mu * mu / x;
 }
 

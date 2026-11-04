@@ -24,6 +24,17 @@ test_that("inverse Gaussian moments", {
   expect_equal(mean(x), 2, tolerance = 0.02); expect_equal(var(x), 8 / 3, tolerance = 0.05)
 })
 
+test_that("inverse Gaussian is exact when mu / lambda is huge (tiny ALD residuals)", {
+  # the subtraction form of Michael, Schucany & Haas (1976) cancelled to 0 here (62% zeros), so 1 / nu = 0,
+  # nu hit its upper clamp and sigma2t of an ALD model jumped to ~1e10 and stayed there
+  set.seed(4)
+  for (p in list(c(1e6, 1e-3), c(1e9, 1e-6))) {
+    x <- birtRcpp:::.rinvgauss(1e5, p[1], p[2])
+    expect_true(all(is.finite(x) & x > 0))
+    expect_equal(mean(1 / x), 1 / p[1] + 1 / p[2], tolerance = 0.03)   # E[1/X] = 1/mu + 1/lambda
+  }
+})
+
 test_that("both item samplers target the exact (a, b) posterior given theta", {
   set.seed(11)
   theta <- rnorm(150); y <- rbinom(150, 1, plogis(1.8 * (theta + 1.2)))     # an easy, discriminating item
